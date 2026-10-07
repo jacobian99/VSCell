@@ -33,9 +33,8 @@ changes.
 [`VALIDATION.md`](VALIDATION.md) records the local package-level and no-API end-to-end
 validation performed before release.
 
-> Development status: this is a pre-release package. Public repository URLs can
-> be added once their final location exists. Raw validation/demo images are not
-> redistributed.
+> Development status: this is a pre-release package. Raw validation/demo images
+> are not redistributed.
 
 ## Pipeline
 

@@ -37,6 +37,12 @@ all = ["openai>=1.40", "anthropic>=0.34", "torch>=2.1"]
 [project.scripts]
 vscell = "vscell.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/jacobian99/VSCell"
+Repository = "https://github.com/jacobian99/VSCell"
+Issues = "https://github.com/jacobian99/VSCell/issues"
+Documentation = "https://github.com/jacobian99/VSCell/blob/main/docs/USER_GUIDE.md"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
