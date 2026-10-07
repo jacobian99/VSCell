@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+build/
+dist/
+.venv/
+
+# Runtime output and credentials must never be committed.
+runs/
+outputs/
+/run/
+/data/
+/segmentation_results/
+*.log
+.env
+*api_key*
+*API_key*
+
+# CellBinDB demo images are prepared locally until redistribution permission
+# is confirmed. Selection IDs and preparation logic remain in the tracked script.
+examples/data/
+
+# Third-party model weights are downloaded by their owning projects.
+weights/
+checkpoints/third_party/
+*.pth
+*.pt
+*.ckpt

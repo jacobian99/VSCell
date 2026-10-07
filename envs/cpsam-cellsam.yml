@@ -1,0 +1,10 @@
+name: vscell-cpsam-cellsam
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - cellpose==4.1.1
+      - "cellSAM @ git+https://github.com/vanvalenlab/cellSAM.git@35bc6e0da6616cf7530e52d0282ee17bb1a57429"
+      - -e ..
