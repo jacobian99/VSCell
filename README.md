@@ -72,6 +72,18 @@ workflow: it is the same pipeline with its settings recorded in a command that
 can be saved in a Bash or Slurm script. Add `--yes` only when the displayed
 summary has already been reviewed.
 
+Non-interactive runs do not show a credential prompt. Before starting, provide
+the matching provider key through the environment: `OPENAI_API_KEY` for either
+GPT model or `ANTHROPIC_API_KEY` for Claude. VSCell intentionally has no
+command-line API-key option, so secrets do not enter shell history, scripts, or
+logs. To enter an OpenAI key privately in an interactive shell:
+
+```bash
+read -rsp "OpenAI API key (raw key, no surrounding quotes): " OPENAI_API_KEY
+echo
+export OPENAI_API_KEY
+```
+
 ```bash
 vscell run \
   --input data \
@@ -83,6 +95,11 @@ vscell run \
   --vlm-model gpt-5.5 \
   --non-interactive --yes
 ```
+
+When the command finishes, clear the session-only key with
+`unset OPENAI_API_KEY` (or `unset ANTHROPIC_API_KEY`). For a fully unattended
+job, use your institution's secure environment or secret-injection mechanism
+instead of placing a key in the job script.
 
 For every prompt and execution path, see the
 [complete user guide](docs/USER_GUIDE.md).
