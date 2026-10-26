@@ -60,6 +60,30 @@ teacher fraction, student settings, and concurrency are available through the
 interactive `advanced` profile or command-line flags. VSCell shows a complete
 summary and starts nothing until the user confirms it.
 
+### Interactive and batch modes
+
+Run `vscell run` without `--non-interactive` for the guided terminal wizard.
+It asks for the settings one at a time and shows the complete run and cost
+summary before it sends hosted-VLM requests or submits Slurm jobs.
+
+For a reproducible batch or HPC run, supply the same choices as command-line
+flags and add `--non-interactive`. This is not a spreadsheet or a separate
+workflow: it is the same pipeline with its settings recorded in a command that
+can be saved in a Bash or Slurm script. Add `--yes` only when the displayed
+summary has already been reviewed.
+
+```bash
+vscell run \
+  --input data \
+  --output run \
+  --target nuclear \
+  --modality DAPI \
+  --candidate-source existing \
+  --teacher-fraction 0.5 \
+  --vlm-model gpt-5.5 \
+  --non-interactive --yes
+```
+
 For every prompt and execution path, see the
 [complete user guide](docs/USER_GUIDE.md).
 
