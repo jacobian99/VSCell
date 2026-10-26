@@ -452,6 +452,72 @@ def _missing_candidate_masks(
     return missing
 
 
+def _detected_complete_candidate_models(
+    candidate_root: Path, analysis: dict
+) -> tuple[str, ...]:
+    """Return model-directory names that cover every requested source image.
+
+    This deliberately inspects only the candidate layout.  It does not read
+    ground truth or make a hosted request.  Users can still override the
+    detected list with ``--models`` for an unusual layout or a deliberate
+    subset.
+    """
+    if not candidate_root.is_dir():
+        return ()
+    models = []
+    for child in sorted(candidate_root.iterdir(), key=lambda path: path.name):
+        if child.is_dir() and not _missing_candidate_masks(
+            candidate_root, (child.name,), analysis
+        ):
+            models.append(child.name)
+    detected = set(models)
+    preferred = [model for model in DEFAULT_MODELS if model in detected]
+    extras = sorted(detected - set(DEFAULT_MODELS))
+    return tuple([*preferred, *extras])
+
+
+def _detected_incomplete_candidate_models(
+    candidate_root: Path, analysis: dict
+) -> tuple[str, ...]:
+    """Return candidate-model folders that do not cover this run's images.
+
+    Automatic discovery must not silently turn a failed four-model run into a
+    three-model run. A user who deliberately wants a subset can state it with
+    ``--models``; otherwise every folder in a candidate-mask root is treated as
+    an intended candidate source and must be complete.
+    """
+    if not candidate_root.is_dir():
+        return ()
+    return tuple(
+        child.name
+        for child in sorted(candidate_root.iterdir(), key=lambda path: path.name)
+        if child.is_dir()
+        and _missing_candidate_masks(candidate_root, (child.name,), analysis)
+    )
+
+
+def _prompt_ranking_mode() -> str:
+    """Ask for a simple ranking profile before exposing expert tuning."""
+    return wf.prompt_choice(
+        "Ranking quality and cost",
+        (
+            (
+                "standard",
+                "rank every patch with the selected hosted VLM; no student ranker",
+            ),
+            (
+                "budget",
+                "rank half the patches with the selected hosted VLM and train a student for the rest",
+            ),
+            (
+                "advanced",
+                "choose the hosted model, teacher fraction, student, and concurrency",
+            ),
+        ),
+        default="standard",
+    )
+
+
 def _teacher_source_ids(
     analysis: dict,
     grid: GridConfig,
@@ -480,9 +546,12 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         if not interactive:
             raise RuntimeError("--input is required when starting a non-interactive run")
         input_value = wf.prompt_text(
-            "Raw-image path (.tif/.tiff/.png/.jpg/.jpeg/.bmp)", "data"
+            "Raw-image folder or file (.tif/.tiff/.png/.jpg/.jpeg/.bmp)", "data"
         )
     input_path = Path(input_value).resolve()
+    # Analyze the raw inputs before asking about existing masks so VSCell can
+    # discover only model folders that are complete for this exact run.
+    analysis = analyze_inputs(input_path, _grid_from_args(args))
 
     target = args.target
     if target is None:
@@ -538,9 +607,9 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
 
     if args.candidates is None and interactive:
         path_label = (
-            "Existing segmentation-results path"
+            "Candidate-mask folder"
             if candidate_source == "existing"
-            else "Segmentation-results output path"
+            else "Where VSCell should write generated candidate masks"
         )
         candidates = Path(wf.prompt_text(path_label, candidate_default)).resolve()
 
@@ -548,20 +617,63 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         models = tuple(DEFAULT_MODELS)
     elif args.models is not None:
         models = tuple(args.models)
-    elif interactive:
-        models = _models(
-            wf.prompt_text("Candidate model names", ",".join(DEFAULT_MODELS))
-        )
     else:
-        models = tuple(DEFAULT_MODELS)
+        incomplete_models = _detected_incomplete_candidate_models(candidates, analysis)
+        if incomplete_models:
+            missing = _missing_candidate_masks(candidates, incomplete_models, analysis)
+            shown = ", ".join(missing[:5])
+            remainder = "" if len(missing) <= 5 else f" (+{len(missing) - 5} more)"
+            raise FileNotFoundError(
+                f"existing candidate masks are incomplete under {candidates}: "
+                f"{shown}{remainder}. Use --models to deliberately select a "
+                "complete subset."
+            )
+        detected_models = _detected_complete_candidate_models(candidates, analysis)
+        if len(detected_models) >= 3:
+            models = detected_models
+            if interactive:
+                wf.announce(
+                    "Detected complete candidate-mask folders: "
+                    + ", ".join(models)
+                )
+        elif interactive:
+            models = _models(
+                wf.prompt_text(
+                    "Candidate model folder names (comma-separated)",
+                    ",".join(DEFAULT_MODELS),
+                )
+            )
+        else:
+            models = tuple(DEFAULT_MODELS)
+
+    # The default path gives a new user one plain-language quality/cost choice.
+    # Direct flags and --advanced retain access to the research-facing knobs.
+    tuning_supplied = any(
+        value is not None
+        for value in (
+            args.teacher_fraction,
+            args.vlm_model,
+            args.workers,
+            args.student_mode,
+            args.student_checkpoint,
+            args.student_execution,
+        )
+    )
+    if interactive and not tuning_supplied:
+        ranking_mode = "advanced" if getattr(args, "advanced", False) else _prompt_ranking_mode()
+    elif getattr(args, "advanced", False) or tuning_supplied:
+        ranking_mode = "advanced"
+    else:
+        ranking_mode = "standard"
 
     teacher_fraction = args.teacher_fraction
     if teacher_fraction is None:
-        teacher_fraction = (
-            wf.prompt_fraction("Fraction ranked by the hosted VLM", 1.0)
-            if interactive
-            else 1.0
-        )
+        if ranking_mode == "budget":
+            teacher_fraction = 0.5
+        elif ranking_mode == "advanced" and interactive:
+            teacher_fraction = wf.prompt_fraction("Fraction ranked by the hosted VLM", 1.0)
+        else:
+            teacher_fraction = 1.0
     if not 0 <= teacher_fraction <= 1:
         raise ValueError("teacher fraction must be in [0, 1]")
 
@@ -586,7 +698,7 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
     if workers is None:
         workers = (
             wf.prompt_int("Concurrent VLM workers", 8)
-            if interactive and teacher_fraction > 0
+            if interactive and ranking_mode == "advanced" and teacher_fraction > 0
             else 8
         )
     if workers < 1:
@@ -599,10 +711,10 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         if interactive:
             slurm_available = shutil.which("sbatch") is not None
             execution = wf.prompt_choice(
-                "Hosted-VLM execution",
+                "Where should hosted ranking run",
                 (
-                    ("slurm", "persistent cluster job; monitored automatically"),
-                    ("local", "run in this terminal process"),
+                    ("slurm", "submit a resumable cluster job"),
+                    ("local", "run in this terminal"),
                 ),
                 default="slurm" if slurm_available else "local",
             )
@@ -619,6 +731,8 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         if student_mode is None:
             if teacher_fraction == 0:
                 student_mode = "existing"
+            elif ranking_mode == "budget":
+                student_mode = "train"
             elif interactive:
                 student_mode = wf.prompt_choice(
                     "Student ranker",
@@ -642,7 +756,9 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         if student_mode == "train":
             student_execution = args.student_execution
             if student_execution is None:
-                if interactive:
+                if ranking_mode == "budget":
+                    student_execution = "slurm" if execution == "slurm" else "local"
+                elif interactive:
                     slurm_available = shutil.which("sbatch") is not None
                     student_execution = wf.prompt_choice(
                         "Student-training execution",
@@ -704,7 +820,6 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
             default=_default_conda_init(),
         )
 
-    analysis = analyze_inputs(input_path, _grid_from_args(args))
     if candidate_source == "existing":
         missing = _missing_candidate_masks(candidates, models, analysis)
         if missing:
@@ -752,6 +867,7 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         "teacher_fraction": teacher_fraction,
         "vlm_model": vlm_model,
         "workers": workers,
+        "guided_profile": ranking_mode,
         "execution": execution,
         "account": account,
         "cpu_partition": cpu_partition,
@@ -806,6 +922,8 @@ def _print_guided_summary(config: dict, plan: dict) -> None:
         file=sys.stderr,
     )
     print(f"  Hosted calls:     {plan['api_call_count']} ({estimate_text})", file=sys.stderr)
+    if config.get("guided_profile"):
+        print(f"  Guided profile:   {config['guided_profile']}", file=sys.stderr)
     if plan["teacher_patch_count"] > 0:
         key_name = wf.provider_key_name(config["vlm_model"])
         if key_name in os.environ:
@@ -1484,6 +1602,14 @@ def build_parser() -> argparse.ArgumentParser:
     guided.add_argument("--teacher-fraction", type=float)
     guided.add_argument("--vlm-model")
     guided.add_argument("--workers", type=_positive_int)
+    guided.add_argument(
+        "--advanced",
+        action="store_true",
+        help=(
+            "In an interactive run, show expert ranking questions instead of "
+            "the standard quality/cost profile"
+        ),
+    )
     guided.add_argument(
         "--execution",
         choices=("local", "slurm"),

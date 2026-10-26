@@ -33,8 +33,9 @@ changes.
 [`VALIDATION.md`](VALIDATION.md) records the local package-level and no-API end-to-end
 validation performed before release.
 
-> Development status: this is a pre-release package. Raw validation/demo images
-> are not redistributed.
+> Development status: this is a pre-release package. Raw validation/demo image
+> files are not redistributed. The repository includes five approved rendered
+> CellBinDB display panels under `examples/example_results/`.
 
 ## Pipeline
 
@@ -356,19 +357,25 @@ For a new run, start with one command:
 vscell run
 ```
 
-In an interactive terminal, VSCell asks for each preference instead of silently
-choosing operational defaults:
+The default interactive path asks only for the decisions most users need:
 
-- nuclear or whole-cell segmentation;
-- a target-compatible built-in imaging modality, or a custom modality and
-  description;
-- existing candidate masks or four built-in segmentation jobs on Slurm;
-- candidate model names when existing masks are used;
-- hosted-VLM teacher fraction and, when needed, student handling;
-- GPT-5.5, GPT-6 Astra, or Claude Fable 5.1;
-- concurrent VLM workers;
-- local or Slurm VLM execution; and
-- required Slurm account, partition, and environment settings.
+1. raw-image file or folder;
+2. nuclear or whole-cell segmentation;
+3. a target-compatible built-in imaging modality, or a custom modality and
+   description;
+4. existing candidate masks or four built-in segmentation jobs on Slurm;
+5. a ranking quality/cost profile;
+6. a hosted VLM (GPT-5.5, GPT-6 Astra, or Claude Fable 5.1); and
+7. local or Slurm hosted-ranking execution.
+
+For existing masks, VSCell automatically detects model directories that have a
+complete mask set for the chosen images. The recommended `standard` profile
+ranks every patch with the selected VLM and does not use a student. The
+`budget` profile ranks half of the patches with the selected VLM and trains a
+student for the remainder. Choose `advanced` in the ranking-profile menu, pass
+`--advanced`, or use command-line flags to set the teacher fraction, student
+behavior, and worker count explicitly. Slurm account, partition, and environment
+prompts remain conditional on selecting Slurm.
 
 Every menu asks the user to enter an option number. When a default is available,
 the prompt explicitly labels its number and says `press Enter to accept`;
@@ -382,16 +389,16 @@ was started.
 
 | Prompt | Meaning and expected input |
 |---|---|
-| `Raw-image path` | File or directory containing the user's source microscopy images. Press Enter for `data`, or type another path. VSCell does not create or download these inputs. |
+| `Raw-image folder or file` | File or directory containing the user's source microscopy images. Press Enter for `data`, or type another path. VSCell does not create or download these inputs. |
 | `Segmentation target` | Enter the option number for nuclear or whole-cell instances. This choice also filters the modality menu and selects target-aware model/prompt behavior. |
 | `Imaging modality` | Enter the option number for a compatible built-in preset. Choose `custom` to provide both a modality name and an image/signal description. One modality applies to every image in the run. |
 | `Candidate segmentation masks` | Choose `existing` to reuse masks already organized by model, or `slurm` to submit the four built-in segmentation backends. |
-| `Existing segmentation-results path` | Root containing `<model>/<image_stem>_masks.tif`. Press Enter for `segmentation_results`. |
-| `Candidate model names` | Comma-separated model-directory names. At least three are required, and every named model must have a mask for every source image. |
-| `Fraction ranked by the hosted VLM` | Proportion of patches ranked directly by the hosted model, from `0` to `1`. See the calculation below. |
-| `Hosted VLM` | Enter the provider/model option number. This prompt is omitted when the teacher fraction is `0`. |
-| `Concurrent VLM workers` | Maximum simultaneous patch-ranking workers. The Slurm ranking job requests the same number of CPUs. |
-| `Hosted-VLM execution` | Choose monitored CPU Slurm execution or execution in the current terminal process. Slurm is normally appropriate on a cluster. |
+| `Candidate-mask folder` | Root containing `<model>/<image_stem>_masks.tif`. Press Enter for `segmentation_results`. VSCell announces the complete model directories it finds. An incomplete folder stops the run rather than being silently omitted; use `--models` only to deliberately select a complete subset. |
+| `Ranking quality and cost` | Choose `standard` (all patches hosted-ranked with the VLM selected next), `budget` (half hosted-ranked, then student-ranked), or `advanced` (expert controls below). |
+| `Hosted VLM` | Choose GPT-5.5, GPT-6 Astra, or Claude Fable 5.1. GPT models use `OPENAI_API_KEY`; Claude uses `ANTHROPIC_API_KEY`. The matching key is requested through hidden input immediately before hosted inference. This prompt is omitted only when the teacher fraction is `0`. |
+| `Where should hosted ranking run` | Choose a monitored CPU Slurm job or execution in the current terminal. Slurm is normally appropriate on a cluster. |
+| `Fraction ranked by the hosted VLM` | Advanced only. Proportion of patches ranked directly by the hosted model, from `0` to `1`. See the calculation below. |
+| `Concurrent VLM workers` | Advanced only. Maximum simultaneous patch-ranking workers. The Slurm ranking job requests the same number of CPUs. |
 | `Student ranker` | Shown when the teacher fraction is below `1`. Choose training from this run's teacher labels or provide an existing compatible checkpoint. |
 | `Student-training execution` | When training a new student, choose a monitored one-GPU Slurm job or the current process. Slurm is the cluster default. The GPU job performs both training and remaining-patch prediction. |
 | `Existing student checkpoint path` | Required only when reusing a checkpoint. Its candidate models, modality vocabulary, and target vocabulary must match the run. |
@@ -482,8 +489,10 @@ Local runtime files do contain operational information needed to resume a run:
 scripts record the user-selected account, partition, and executable paths. They
 contain no provider key, but they should remain local rather than be committed
 or shared if paths or cluster metadata are sensitive. Runtime outputs, logs,
-credentials, local demo images, and third-party weights are excluded by the
-repository ignore rules and are not part of the built wheel.
+credentials, unapproved local demo images, and third-party weights are excluded
+by the repository ignore rules and are not part of the built wheel. The five
+approved rendered display panels in `examples/example_results/` are static
+GitHub documentation assets, not runtime data or package inputs.
 
 Slurm execution is continuous by default. After displaying the submitted job
 ID, VSCell remains in the terminal, reports queue and completed-patch progress,
@@ -809,9 +818,10 @@ python examples/prepare_cellbindb_demo.py \
   --index /path/to/cellbindb_index.csv
 ```
 
-`examples/data/` is gitignored. The official CellBinDB archive currently does
-not state a dataset-wide license in its Zenodo rights field, so these raw images
-must not be committed publicly until redistribution permission is confirmed.
+`examples/data/` is gitignored. The full raw CellBinDB demo files remain local.
+The repository contains only the five separately approved rendered display
+panels in `examples/example_results/`; their data reference and post-hoc-only
+evaluation role are documented with the assets.
 
 ## Scientific defaults
 

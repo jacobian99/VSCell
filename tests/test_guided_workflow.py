@@ -98,6 +98,17 @@ def test_guided_hidden_key_is_temporary(monkeypatch):
     assert "OPENAI_API_KEY" not in cli.wf.os.environ
 
 
+def test_guided_hidden_claude_key_is_temporary(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(cli.wf.getpass, "getpass", lambda _prompt: "temporary-test-key")
+
+    with cli.wf.provider_key("claude-fable-5-1", interactive=True) as name:
+        assert name == "ANTHROPIC_API_KEY"
+        assert cli.wf.os.environ[name] == "temporary-test-key"
+
+    assert "ANTHROPIC_API_KEY" not in cli.wf.os.environ
+
+
 def test_guided_existing_key_is_reused_without_prompt_and_preserved(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "existing-test-key")
 
@@ -161,6 +172,113 @@ def _multi_image_inputs(tmp_path):
             mask[3:13, 3:13] = 1
             tifffile.imwrite(destination / f"{image_id}_masks.tif", mask)
     return input_dir, run_root
+
+
+def test_guided_auto_detects_complete_existing_model_directories(tmp_path):
+    input_dir = tmp_path / "data"
+    candidate_root = tmp_path / "candidate_masks"
+    input_dir.mkdir()
+    image = np.zeros((16, 16), dtype=np.uint8)
+    image[4:12, 4:12] = 180
+    tifffile.imwrite(input_dir / "example.tif", image)
+    for model in ("method_alpha", "method_beta", "method_gamma"):
+        destination = candidate_root / model
+        destination.mkdir(parents=True)
+        mask = np.zeros(image.shape, dtype=np.uint16)
+        mask[4:12, 4:12] = 1
+        tifffile.imwrite(destination / "example_masks.tif", mask)
+
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--input",
+            str(input_dir),
+            "--output",
+            str(tmp_path / "run"),
+            "--candidates",
+            str(candidate_root),
+            "--target",
+            "nuclear",
+            "--modality",
+            "DAPI",
+            "--candidate-source",
+            "existing",
+            "--execution",
+            "local",
+            "--non-interactive",
+        ]
+    )
+    config, _plan = cli._new_guided_config(args, interactive=False)
+
+    assert config["models"] == ["method_alpha", "method_beta", "method_gamma"]
+    assert config["guided_profile"] == "standard"
+    assert config["teacher_fraction"] == 1.0
+
+
+def test_guided_standard_profile_hides_expert_prompts(tmp_path, monkeypatch, capsys):
+    input_dir, run_root = _modern_inputs(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+    answers = iter(("", "", "", ""))
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--input",
+            str(input_dir),
+            "--output",
+            str(run_root),
+            "--target",
+            "nuclear",
+            "--modality",
+            "ssDNA",
+            "--candidate-source",
+            "existing",
+        ]
+    )
+
+    config, _plan = cli._new_guided_config(args, interactive=True)
+
+    assert config["models"] == list(MODELS)
+    assert config["guided_profile"] == "standard"
+    assert config["teacher_fraction"] == 1.0
+    assert config["vlm_model"] == "gpt-5.5"
+    assert config["workers"] == 8
+    assert config["student_mode"] == "none"
+    assert config["execution"] == "local"
+    displayed = capsys.readouterr().err
+    assert "Detected complete candidate-mask folders" in displayed
+    assert "Fraction ranked by the hosted VLM" not in displayed
+    assert "Concurrent VLM workers" not in displayed
+    assert "Hosted VLM" in displayed
+
+
+def test_guided_standard_profile_can_select_claude(tmp_path, monkeypatch):
+    input_dir, run_root = _modern_inputs(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+    answers = iter(("", "", "3", ""))
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--input",
+            str(input_dir),
+            "--output",
+            str(run_root),
+            "--target",
+            "nuclear",
+            "--modality",
+            "ssDNA",
+            "--candidate-source",
+            "existing",
+        ]
+    )
+
+    config, _plan = cli._new_guided_config(args, interactive=True)
+
+    assert config["vlm_model"] == "claude-fable-5-1"
+    assert cli.wf.provider_key_name(config["vlm_model"]) == "ANTHROPIC_API_KEY"
 
 
 def _fake_rank_patch(patch_id, reference, panels, modality, target, **kwargs):

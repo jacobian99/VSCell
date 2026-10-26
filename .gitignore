@@ -18,8 +18,8 @@ outputs/
 *api_key*
 *API_key*
 
-# CellBinDB demo images are prepared locally until redistribution permission
-# is confirmed. Selection IDs and preparation logic remain in the tracked script.
+# Full raw CellBinDB demo images remain local. Approved rendered display panels
+# are stored separately under examples/example_results/.
 examples/data/
 
 # Third-party model weights are downloaded by their owning projects.

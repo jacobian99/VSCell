@@ -1,11 +1,11 @@
 # Validation record
 
-The local pre-release package was validated on 2026-10-06 before any GitHub
+The local release candidate was validated on 2026-10-25 before any GitHub
 publication.
 
 ## Automated package checks
 
-- All 40 tests passed in the environment containing PyTorch, including
+- All 44 tests passed in the environment containing PyTorch, including
   concurrent teacher ranking, guided local completion, Slurm detach/resume,
   secure temporary/existing key handling, target-filtered modality selection, student-training
   preflight constraints, monitored one-GPU student train/predict orchestration,
@@ -15,8 +15,11 @@ publication.
 - The wheel built and installed successfully in a clean target directory.
 - The installed CLI reported `VSCell 0.1.0.dev0`.
 - The wheel contained the MIT license and third-party notices.
-- Distributable files contained no credentials, third-party weights, local demo
-  images, or executable hard-coded HPC paths.
+- Distributable files contained no credentials, third-party weights, or
+  executable hard-coded HPC paths. The only included microscopy visuals are the
+  five approved 256×256 CellBinDB-derived display panels under
+  `examples/example_results/`; their provenance, citation, and post-hoc-only
+  evaluation role are documented beside the assets.
 
 ## Five-image no-API workflow
 

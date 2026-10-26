@@ -9,8 +9,9 @@ stitches the local results into one globally labelled mask.
 Segmentation ground truth is never required at inference time. Segmentation
 models run once on each full image, not once per crop.
 
-> Development status: pre-release (`0.1.0.dev0`). Raw validation images,
+> Development status: pre-release (`0.1.0.dev0`). Raw validation image files,
 > third-party weights, credentials, and runtime outputs are not redistributed.
+> The five approved rendered CellBinDB display panels are documented below.
 
 ## Quick start
 
@@ -36,13 +37,28 @@ mkdir data
 vscell run
 ```
 
-`vscell run` is the recommended interface. It asks for the segmentation target,
-modality, candidate-mask source, VLM, teacher fraction, concurrency, and local
-or Slurm execution. It shows a complete summary and starts nothing until the
-user confirms it.
+`vscell run` is the recommended interface. Its standard guided path asks for
+the image path, segmentation target, modality, candidate-mask source, ranking
+quality/cost profile, hosted VLM, and local or Slurm execution. Existing
+candidate-model folders are detected automatically. Expert controls such as
+teacher fraction, student settings, and concurrency are available through the
+interactive `advanced` profile or command-line flags. VSCell shows a complete
+summary and starts nothing until the user confirms it.
 
 For every prompt and execution path, see the
 [complete user guide](docs/USER_GUIDE.md).
+
+## Example results
+
+Five curated CellBinDB crops show the reference image, held-out GT overlay,
+VSCell output, and all four candidate models before installation. GT is used
+only for this retrospective comparison—not by the VSCell workflow. Four of the
+five selected crops beat their own best single candidate model; the remaining
+DAPI crop is a close comparison (−0.0090). See the full
+[example-results gallery](examples/example_results/) and the individual
+per-method visual crops.
+
+![Representative VSCell comparison](examples/example_results/comparison/01_ssdna_w4.png)
 
 ## What VSCell does
 
@@ -236,7 +252,7 @@ Run the package tests with:
 python -m pytest
 ```
 
-The release sanity suite contains 40 tests covering the guided workflow,
+The release sanity suite contains 44 tests covering the guided workflow,
 credential lifecycle, modality and provider routing, the four backend adapters,
 concurrent ranking, student orchestration, consensus, stitching, and package
 invariants.
