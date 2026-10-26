@@ -13,6 +13,21 @@ models run once on each full image, not once per crop.
 > third-party weights, credentials, and runtime outputs are not redistributed.
 > The five approved rendered CellBinDB display panels are documented below.
 
+## How VSCell works
+
+VSCell starts with one full-image mask from each candidate segmentation model.
+It matches each image with its candidate-mask overlays, makes local patches, and
+asks a hosted VLM to rank an anonymized subset. An optional distilled student
+ranker extends those rankings to the remaining patches. The GT-free consensus
+module then reconciles candidate instances and stitches the patch results into
+one full-image labelled mask.
+
+![VSCell workflow: candidate segmentation, patch ranking, consensus ensemble, and full-image mask](docs/assets/vscell-workflow.png)
+
+*VSCell workflow. The VLM teacher, optional student ranker, and consensus
+ensemble operate on image-and-candidate-mask patches; segmentation ground truth
+is not accepted or used during inference.*
+
 ## Quick start
 
 Python 3.10 or newer is required. From the repository root, create a lightweight
