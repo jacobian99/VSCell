@@ -43,7 +43,7 @@ def render_backend_scripts(
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --time=04:00:00
-#SBATCH --export=ALL
+#SBATCH --export=NONE
 #SBATCH --output={logs_dir}/%x_%j.out
 #SBATCH --error={logs_dir}/%x_%j.err
 
@@ -214,7 +214,7 @@ def render_train_student_script(
 #SBATCH --cpus-per-task={cpus}
 #SBATCH --mem={memory}
 #SBATCH --time={time_limit}
-#SBATCH --export=ALL
+#SBATCH --export=NONE
 #SBATCH --output={logs_dir}/%x_%j.out
 #SBATCH --error={logs_dir}/%x_%j.err
 

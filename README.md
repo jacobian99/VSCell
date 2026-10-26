@@ -9,6 +9,11 @@ stitches the local results into one globally labelled mask.
 Segmentation ground truth is never required at inference time. Segmentation
 models run once on each full image, not once per crop.
 
+**Input to output.** Give VSCell raw microscopy images and choose either its
+built-in candidate segmentation backends or compatible candidate masks you
+already generated. VSCell ranks the candidates, applies consensus, and writes
+one full-image, globally labelled instance mask for every input image.
+
 > Development status: pre-release (`0.1.0.dev0`). Raw validation image files,
 > third-party weights, credentials, and runtime outputs are not redistributed.
 > The five approved rendered CellBinDB display panels are documented below.
@@ -108,11 +113,10 @@ For every prompt and execution path, see the
 
 Five curated CellBinDB crops show the reference image, held-out GT overlay,
 VSCell output, and all four candidate models before installation. GT is used
-only for this retrospective comparison—not by the VSCell workflow. Four of the
-five selected crops beat their own best single candidate model; the remaining
-DAPI crop is a close comparison (−0.0090). See the full
-[example-results gallery](examples/example_results/) and the individual
-per-method visual crops.
+only for this retrospective comparison—not by the VSCell workflow. Across
+these examples, VSCell is comparable to the best individual candidate model
+and outperforms it in most cases. See the full [example-results
+gallery](examples/example_results/) and the individual per-method visual crops.
 
 ![Representative VSCell comparison](examples/example_results/comparison/01_ssdna_w4.png)
 

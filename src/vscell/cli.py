@@ -697,9 +697,9 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
     workers = args.workers
     if workers is None:
         workers = (
-            wf.prompt_int("Concurrent VLM workers", 8)
+            wf.prompt_int("Concurrent VLM workers", 32)
             if interactive and ranking_mode == "advanced" and teacher_fraction > 0
-            else 8
+            else 32
         )
     if workers < 1:
         raise ValueError("workers must be at least 1")
@@ -1785,7 +1785,7 @@ def build_parser() -> argparse.ArgumentParser:
     rank_slurm.add_argument("--vlm-model", default="gpt-5.5")
     rank_slurm.add_argument("--modality-description")
     rank_slurm.add_argument("--seed", type=int, default=120912)
-    rank_slurm.add_argument("--workers", type=_positive_int, default=8)
+    rank_slurm.add_argument("--workers", type=_positive_int, default=32)
     rank_slurm.add_argument("--environment", default=sys.prefix)
     rank_slurm.add_argument("--account", default="<ACCOUNT>")
     rank_slurm.add_argument("--cpu-partition", default="<CPU_PARTITION>")

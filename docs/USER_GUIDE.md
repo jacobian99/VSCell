@@ -398,9 +398,14 @@ was started.
 | `Hosted VLM` | Choose GPT-5.5, GPT-6 Astra, or Claude Fable 5.1. GPT models use `OPENAI_API_KEY`; Claude uses `ANTHROPIC_API_KEY`. The matching key is requested through hidden input immediately before hosted inference. This prompt is omitted only when the teacher fraction is `0`. |
 | `Where should hosted ranking run` | Choose a monitored CPU Slurm job or execution in the current terminal. Slurm is normally appropriate on a cluster. |
 | `Fraction ranked by the hosted VLM` | Advanced only. Proportion of patches ranked directly by the hosted model, from `0` to `1`. See the calculation below. |
-| `Concurrent VLM workers` | Advanced only. Maximum simultaneous patch-ranking workers. The Slurm ranking job requests the same number of CPUs. |
+| `Concurrent VLM workers` | Advanced only. Maximum simultaneous patch-ranking workers; the guided and non-interactive `vscell run` default is 32. The Slurm ranking job requests the same number of CPUs. Lower this value if the provider rate-limits the account. |
 | `Student ranker` | Shown when the teacher fraction is below `1`. Choose training from this run's teacher labels or provide an existing compatible checkpoint. |
 | `Student-training execution` | When training a new student, choose a monitored one-GPU Slurm job or the current process. Slurm is the cluster default. The GPU job performs both training and remaining-patch prediction. |
+
+GPU account and partition names are cluster-specific and are never hard-coded
+by VSCell. Supply the `--gpu-partition` value appropriate to your cluster.
+If you choose a preemptible queue, retain the run directory so the workflow
+can be resumed.
 | `Existing student checkpoint path` | Required only when reusing a checkpoint. Its candidate models, modality vocabulary, and target vocabulary must match the run. |
 | `Slurm account` | Cluster project/allocation charged for compute time, not the login username or API account. Ask the cluster administrator if unknown. |
 | `Slurm CPU partition` | Queue for the CPU hosted-VLM ranking job. It is requested only when hosted ranking uses Slurm. |
@@ -709,8 +714,8 @@ unset OPENAI_API_KEY
 ```
 
 When `read` is used, pasted quote characters become part of the key and cause
-an authentication failure. This differs from a direct shell assignment such as
-`export OPENAI_API_KEY='sk-...'`, where the shell removes the syntactic quotes.
+an authentication failure. This differs from a direct shell assignment, where
+the shell removes syntactic quotes around the value.
 
 Supported model identifiers are `gpt-5.5`, `gpt-6-astra`, and
 `claude-fable-5-1`. The latter two are the packaged GPT-6 and Claude

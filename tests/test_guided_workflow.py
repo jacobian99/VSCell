@@ -243,7 +243,7 @@ def test_guided_standard_profile_hides_expert_prompts(tmp_path, monkeypatch, cap
     assert config["guided_profile"] == "standard"
     assert config["teacher_fraction"] == 1.0
     assert config["vlm_model"] == "gpt-5.5"
-    assert config["workers"] == 8
+    assert config["workers"] == 32
     assert config["student_mode"] == "none"
     assert config["execution"] == "local"
     displayed = capsys.readouterr().err

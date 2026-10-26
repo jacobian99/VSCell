@@ -23,7 +23,7 @@ def test_slurm_renderer_creates_usable_absolute_log_paths(tmp_path):
     assert (output_dir / "logs").is_dir()
     for path in paths:
         text = path.read_text()
-        assert "#SBATCH --export=ALL" in text
+        assert "#SBATCH --export=NONE" in text
         assert f"#SBATCH --output={output_dir.resolve()}/logs/%x_%j.out" in text
         assert f"--input {input_dir.resolve()}" in text
         assert f"--output {candidate_dir.resolve()}" in text
@@ -44,6 +44,7 @@ def test_rank_slurm_renderer_uses_workers_resume_and_no_embedded_key(tmp_path):
     )
     text = path.read_text()
     assert "#SBATCH --cpus-per-task=12" in text
+    assert "#SBATCH --export=ALL" in text
     assert "OPENAI_API_KEY is unset" in text
     assert "--workers" in text
     assert "--resume" in text
@@ -78,6 +79,7 @@ def test_student_slurm_renderer_requests_gpu_and_uses_installed_cli(tmp_path):
     assert "#SBATCH --partition=example-gpu" in text
     assert "#SBATCH --gres=gpu:1" in text
     assert "#SBATCH --cpus-per-task=4" in text
+    assert "#SBATCH --export=NONE" in text
     assert str(environment.resolve() / "bin/vscell") in text
     assert "train-student" in text
     assert "predict-student" in text
