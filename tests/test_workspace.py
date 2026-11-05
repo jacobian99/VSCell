@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import tifffile
+from PIL import Image
 
 from vscell.config import GridConfig
 from vscell.workspace import finalize_workspace, load_manifest, prepare_workspace
@@ -52,10 +53,15 @@ def test_synthetic_workspace_round_trip(tmp_path):
         workspace,
         target="nuclear",
         modality="ssDNA",
-        grid=GridConfig(base_rows=2, base_cols=2),
+        grid=GridConfig(),
     )
     manifest = load_manifest(manifest_path)
-    assert len(manifest["patches"]) == 4
+    assert len(manifest["patches"]) == 1
+    assert manifest["images"][0]["grid"] == [1, 1]
+    assert Image.open(manifest["patches"][0]["reference_panel"]).size == (256, 256)
+    assert Image.open(
+        manifest["patches"][0]["candidate_panels"][models[0]]
+    ).size == (256, 256)
     rankings_path = workspace / "rankings.jsonl"
     rankings_path.write_text(
         "".join(
@@ -101,7 +107,7 @@ def test_prepare_accepts_external_model_full_image_masks(tmp_path):
         target="nuclear",
         modality="DAPI",
         models=models,
-        grid=GridConfig(base_rows=1, base_cols=1),
+        grid=GridConfig(),
     )
     manifest = load_manifest(manifest_path)
 

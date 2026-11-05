@@ -12,6 +12,12 @@ from vscell import cli
 MODELS = ("cellpose", "stardist", "cellsam", "cellpose_sam")
 
 
+def _candidate_mask(shape, count=20):
+    mask = np.zeros(shape, dtype=np.uint16)
+    mask.ravel()[:count] = np.arange(1, count + 1, dtype=np.uint16)
+    return mask
+
+
 def test_guided_default_prompt_explicitly_explains_enter(monkeypatch):
     prompts = []
 
@@ -133,8 +139,7 @@ def _inputs(tmp_path):
     for model in MODELS:
         destination = candidates / model
         destination.mkdir(parents=True)
-        mask = np.zeros(image.shape, dtype=np.uint16)
-        mask[4:12, 4:12] = 1
+        mask = _candidate_mask(image.shape)
         tifffile.imwrite(destination / "example_masks.tif", mask)
     return input_dir, run_root
 
@@ -150,8 +155,7 @@ def _modern_inputs(tmp_path):
     for model in MODELS:
         destination = candidates / model
         destination.mkdir(parents=True)
-        mask = np.zeros(image.shape, dtype=np.uint16)
-        mask[4:12, 4:12] = 1
+        mask = _candidate_mask(image.shape)
         tifffile.imwrite(destination / "example_masks.tif", mask)
     return input_dir, run_root
 
@@ -168,8 +172,7 @@ def _multi_image_inputs(tmp_path):
         for model in MODELS:
             destination = candidates / model
             destination.mkdir(parents=True, exist_ok=True)
-            mask = np.zeros(image.shape, dtype=np.uint16)
-            mask[3:13, 3:13] = 1
+            mask = _candidate_mask(image.shape)
             tifffile.imwrite(destination / f"{image_id}_masks.tif", mask)
     return input_dir, run_root
 
@@ -184,8 +187,7 @@ def test_guided_auto_detects_complete_existing_model_directories(tmp_path):
     for model in ("method_alpha", "method_beta", "method_gamma"):
         destination = candidate_root / model
         destination.mkdir(parents=True)
-        mask = np.zeros(image.shape, dtype=np.uint16)
-        mask[4:12, 4:12] = 1
+        mask = _candidate_mask(image.shape)
         tifffile.imwrite(destination / "example_masks.tif", mask)
 
     args = cli.build_parser().parse_args(
@@ -307,10 +309,6 @@ def _run_args(input_dir, run_root, *extra):
         "gpt-5.5",
         "--workers",
         "2",
-        "--base-rows",
-        "1",
-        "--base-cols",
-        "1",
         "--non-interactive",
         "--yes",
         *extra,
@@ -380,10 +378,6 @@ def test_student_preflight_rejects_too_few_teacher_patches(tmp_path, capsys):
             "local",
             "--teacher-fraction",
             "0.2",
-            "--base-rows",
-            "4",
-            "--base-cols",
-            "4",
         )
     ) == 1
 
@@ -406,10 +400,6 @@ def test_student_preflight_rejects_training_from_one_source_image(
             "local",
             "--teacher-fraction",
             "0.5",
-            "--base-rows",
-            "4",
-            "--base-cols",
-            "4",
         )
     ) == 1
 
@@ -499,10 +489,6 @@ def test_guided_slurm_student_gpu_job_continues_to_combined_finalization(
         run_root,
         "--teacher-fraction",
         "0.5",
-        "--base-rows",
-        "2",
-        "--base-cols",
-        "2",
         "--execution",
         "slurm",
         "--account",

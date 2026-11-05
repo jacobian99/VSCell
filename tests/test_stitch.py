@@ -1,18 +1,17 @@
 import numpy as np
 
 from vscell.config import GridConfig
-from vscell.grid import GridReference, build_grid
+from vscell.grid import build_grid, plan_grid
 from vscell.stitch import stitch_image
 
 
 def test_cross_core_cells_use_image_level_best_model():
     shape = (10, 20)
-    patches = build_grid(
-        "img",
-        shape,
-        GridReference(*shape),
-        GridConfig(base_rows=1, base_cols=2, padding_fraction=0.10),
-    )
+    planning_mask = np.zeros(shape, dtype=np.uint16)
+    planning_mask.ravel()[:10] = np.arange(1, 11, dtype=np.uint16)
+    plan = plan_grid(shape, {name: planning_mask for name in "abcd"})
+    assert (plan.rows, plan.cols) == (1, 2)
+    patches = build_grid("img", shape, plan, GridConfig(padding_fraction=0.10))
     best = np.zeros(shape, dtype=np.int32)
     best[3:7, 8:12] = 1  # crosses the two cores
     local_global = np.zeros(shape, dtype=np.int32)

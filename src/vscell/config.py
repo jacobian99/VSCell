@@ -74,21 +74,54 @@ def preset_target(modality: str) -> Target | None:
 
 @dataclass(frozen=True)
 class GridConfig:
-    base_rows: int = 4
-    base_cols: int = 4
-    lower_deadband: float = 0.75
-    upper_deadband: float = 1.50
+    """Controls for candidate-density-aware crop planning.
+
+    ``target_cells_per_core`` is deliberately a soft target.  The planner first
+    preserves the source-image aspect ratio (an exactly square image receives a
+    square grid), then selects an occupancy within the acceptable range that is
+    closest to the target.  Limits are applied afterwards and may only add
+    splits; they never make a core larger.
+    """
+
+    target_cells_per_core: float = 5.0
+    minimum_expected_cells_per_core: float = 3.0
+    maximum_expected_cells_per_core: float = 10.0
+    max_core_height: int = 2048
+    max_core_width: int = 2048
+    max_core_area: int = 4_194_304
+    max_patch_count: int = 4096
+    vlm_panel_size: int = 256
+    count_disagreement_ratio: float = 2.0
     padding_fraction: float = 0.10
 
     def __post_init__(self) -> None:
-        if self.base_rows < 1 or self.base_cols < 1:
-            raise ValueError("base grid dimensions must be positive")
-        if not 0 < self.lower_deadband <= 1 <= self.upper_deadband:
-            raise ValueError("deadband must enclose 1")
+        if self.target_cells_per_core <= 0:
+            raise ValueError("target_cells_per_core must be positive")
+        if self.minimum_expected_cells_per_core <= 0:
+            raise ValueError("minimum_expected_cells_per_core must be positive")
+        if self.maximum_expected_cells_per_core < self.minimum_expected_cells_per_core:
+            raise ValueError(
+                "maximum_expected_cells_per_core must be at least the minimum"
+            )
+        if not (
+            self.minimum_expected_cells_per_core
+            <= self.target_cells_per_core
+            <= self.maximum_expected_cells_per_core
+        ):
+            raise ValueError("target_cells_per_core must lie within the expected range")
+        for name in (
+            "max_core_height",
+            "max_core_width",
+            "max_core_area",
+            "max_patch_count",
+            "vlm_panel_size",
+        ):
+            if int(getattr(self, name)) < 1:
+                raise ValueError(f"{name} must be positive")
+        if self.count_disagreement_ratio < 1:
+            raise ValueError("count_disagreement_ratio must be at least 1")
         if not 0 <= self.padding_fraction < 1:
             raise ValueError("padding_fraction must be in [0, 1)")
-
-
 @dataclass(frozen=True)
 class EnsembleConfig:
     minimum_area: int = 1

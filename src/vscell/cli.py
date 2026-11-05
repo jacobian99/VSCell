@@ -13,7 +13,6 @@ from pathlib import Path
 from . import workflow as wf
 from .backends import BACKENDS, backend_environment_hint, run_backend
 from .config import DEFAULT_MODELS, MODEL_IDS, EnsembleConfig, GridConfig
-from .grid import GridReference, build_grid
 from .ranking import pairwise_vote_probabilities
 from .slurm import (
     render_backend_scripts,
@@ -24,6 +23,7 @@ from .student import StudentExample, predict_student, train_student
 from .vlm import canonical_model, estimated_cost, rank_patch
 from .workspace import (
     analyze_inputs,
+    analyze_workspace,
     finalize_workspace,
     load_manifest,
     load_rankings,
@@ -49,29 +49,39 @@ def _positive_int(value: str) -> int:
 
 def _grid_from_args(args: argparse.Namespace) -> GridConfig:
     return GridConfig(
-        base_rows=args.base_rows,
-        base_cols=args.base_cols,
-        lower_deadband=args.lower_deadband,
-        upper_deadband=args.upper_deadband,
+        target_cells_per_core=args.target_cells_per_core,
+        minimum_expected_cells_per_core=args.minimum_expected_cells_per_core,
+        maximum_expected_cells_per_core=args.maximum_expected_cells_per_core,
+        max_core_height=args.max_core_height,
+        max_core_width=args.max_core_width,
+        max_core_area=args.max_core_area,
+        max_patch_count=args.max_patch_count,
+        vlm_panel_size=args.vlm_panel_size,
+        count_disagreement_ratio=args.count_disagreement_ratio,
         padding_fraction=args.padding_fraction,
     )
 
 
 def _add_grid(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--base-rows", type=int, default=4)
-    parser.add_argument("--base-cols", type=int, default=4)
-    parser.add_argument("--lower-deadband", type=float, default=0.75)
-    parser.add_argument("--upper-deadband", type=float, default=1.50)
+    parser.add_argument("--target-cells-per-core", type=float, default=5.0)
+    parser.add_argument("--minimum-expected-cells-per-core", type=float, default=3.0)
+    parser.add_argument("--maximum-expected-cells-per-core", type=float, default=10.0)
+    parser.add_argument("--max-core-height", type=_positive_int, default=2048)
+    parser.add_argument("--max-core-width", type=_positive_int, default=2048)
+    parser.add_argument("--max-core-area", type=_positive_int, default=4_194_304)
+    parser.add_argument("--max-patch-count", type=_positive_int, default=4096)
+    parser.add_argument("--vlm-panel-size", type=_positive_int, default=256)
+    parser.add_argument("--count-disagreement-ratio", type=float, default=2.0)
     parser.add_argument(
         "--padding-fraction",
         type=float,
         default=0.10,
-        help="Historical total side-length increase; 0.10 is about 5%% per side.",
+        help="Total side-length increase; 0.10 is about 5%% per side.",
     )
-
-
 def _cmd_plan(args: argparse.Namespace) -> int:
-    analysis = analyze_inputs(args.input, _grid_from_args(args))
+    analysis = analyze_workspace(
+        args.input, args.candidates, models=args.models, grid=_grid_from_args(args)
+    )
     teacher_patch_count = round(analysis["patch_count"] * args.teacher_fraction)
     analysis["teacher_fraction"] = args.teacher_fraction
     analysis["teacher_patch_count"] = teacher_patch_count
@@ -518,25 +528,28 @@ def _prompt_ranking_mode() -> str:
     )
 
 
-def _teacher_source_ids(
-    analysis: dict,
-    grid: GridConfig,
-    fraction: float,
-    seed: int,
-) -> set[str]:
-    reference = GridReference(**analysis["grid_reference"])
-    patch_sources = {}
-    patch_rows = []
-    for image in analysis["images"]:
-        for patch in build_grid(
-            image["image_id"], tuple(image["shape"]), reference, grid
-        ):
-            patch_rows.append({"patch_id": patch.patch_id})
-            patch_sources[patch.patch_id] = image["image_id"]
+def _validate_student_training_preflight(
+    patch_rows: list[dict], fraction: float, seed: int
+) -> None:
+    """Require enough teacher patches from at least two source images."""
     teacher, _student = select_teacher_patches(
         {"patches": patch_rows}, fraction, seed
     )
-    return {patch_sources[patch_id] for patch_id in teacher}
+    if len(teacher) < 4:
+        raise ValueError(
+            "student training requires at least four hosted teacher patches; "
+            "increase the teacher fraction or use an existing compatible "
+            "student checkpoint"
+        )
+    patch_sources = {row["patch_id"]: row["image_id"] for row in patch_rows}
+    teacher_sources = {patch_sources[patch_id] for patch_id in teacher}
+    if len(teacher_sources) < 2:
+        raise ValueError(
+            "student training requires teacher patches from at least two "
+            "source images for leakage-free validation; use teacher fraction "
+            "1.0 for a one-image run or use an existing compatible student "
+            "checkpoint"
+        )
 
 
 def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dict, dict]:
@@ -551,7 +564,7 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
     input_path = Path(input_value).resolve()
     # Analyze the raw inputs before asking about existing masks so VSCell can
     # discover only model folders that are complete for this exact run.
-    analysis = analyze_inputs(input_path, _grid_from_args(args))
+    analysis = analyze_inputs(input_path)
 
     target = args.target
     if target is None:
@@ -829,27 +842,38 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
                 f"existing candidate masks are incomplete under {candidates}: "
                 f"{shown}{remainder}"
             )
-    teacher_count = round(analysis["patch_count"] * teacher_fraction)
-    if student_mode == "train":
-        if teacher_count < 4:
-            raise ValueError(
-                "student training requires at least four hosted teacher patches; "
-                "increase the teacher fraction or use an existing compatible "
-                "student checkpoint"
-            )
-        teacher_sources = _teacher_source_ids(
-            analysis,
-            _grid_from_args(args),
-            teacher_fraction,
-            args.seed,
+        analysis = analyze_workspace(
+            input_path,
+            candidates,
+            models=models,
+            grid=_grid_from_args(args),
         )
-        if len(teacher_sources) < 2:
-            raise ValueError(
-                "student training requires teacher patches from at least two "
-                "source images for leakage-free validation; use teacher fraction "
-                "1.0 for a one-image run or use an existing compatible student "
-                "checkpoint"
-            )
+    else:
+        # Candidate-derived planning cannot occur until the four backend jobs
+        # have produced their full-image masks. Workspace preparation performs
+        # that mandatory second preflight before it emits any VLM panel.
+        analysis = {
+            **analysis,
+            "patch_count": 0,
+            "warnings": [
+                "candidate-derived patch count and VLM cost will be calculated "
+                "after backend masks are available"
+            ],
+        }
+    teacher_count = round(analysis["patch_count"] * teacher_fraction)
+    if student_mode == "train" and candidate_source == "existing":
+        patch_rows = [
+            {
+                "patch_id": f"{image['image_id']}__r{row:03d}_c{col:03d}",
+                "image_id": image["image_id"],
+            }
+            for image in analysis["images"]
+            for row in range(image["grid"][0])
+            for col in range(image["grid"][1])
+        ]
+        _validate_student_training_preflight(
+            patch_rows, teacher_fraction, args.seed
+        )
     projected_cost = estimated_cost(
         vlm_model, analysis["patch_count"], teacher_fraction
     )
@@ -1140,6 +1164,12 @@ def _execute_guided_run(args: argparse.Namespace, state_path: Path, state: dict)
                     reason="candidate masks did not pass workspace validation",
                 )
             raise
+        if config["student_mode"] == "train" and config["candidate_source"] != "existing":
+            _validate_student_training_preflight(
+                load_manifest(prepared)["patches"],
+                config["teacher_fraction"],
+                config["seed"],
+            )
         _mark_workflow_stage(
             state_path, state, "prepare", "complete", manifest=str(prepared)
         )
@@ -1675,6 +1705,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     plan = sub.add_parser("plan", help="analyze image sizes and estimate VLM cost")
     plan.add_argument("--input", required=True)
+    plan.add_argument("--candidates", required=True)
+    plan.add_argument(
+        "--models",
+        type=_models,
+        default=DEFAULT_MODELS,
+        metavar="MODEL1,MODEL2,MODEL3,...",
+    )
     plan.add_argument("--teacher-fraction", type=float, default=1.0)
     plan.add_argument("--vlm-model", default="gpt-5.5")
     _add_grid(plan)

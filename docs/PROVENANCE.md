@@ -25,8 +25,12 @@ logic.
 ## Intentional GT-free package changes
 
 - Paper crop selection used GT-selected neighborhoods. The package replaces
-  this with the user-approved image-size-distribution grid and never accepts a
-  GT mask at inference time.
+  this with a GT-free candidate-mask median instance-count rule: it targets
+  five cells per core (soft range 3–10) while preserving image geometry, and
+  never accepts a GT mask at inference time.
+- VLM presentation is normalized to a fit/pad 256×256 panel for both the raw
+  reference and every candidate overlay. This is display-only; native masks
+  remain unchanged for consensus and stitching.
 - The paper used dataset-specific candidate lists. The package exposes one
   consistent four-backend set: Cellpose, StarDist, CellSAM, and Cellpose-SAM.
 - Stable SHA-256-derived random seeds replace Python's process-salted `hash()`

@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .config import DEFAULT_MODELS, EnsembleConfig, GridConfig
 from .ensemble import vscell_consensus
-from .grid import GridReference, Patch, build_grid, infer_grid_reference
+from .grid import GridPlan, Patch, build_grid, plan_grid
 from .io import list_images, read_image, read_mask, write_mask
 from .stitch import stitch_image
 from .visualization import save_panel_set
@@ -35,26 +35,67 @@ def _mask_path(candidate_root: Path, model: str, image_stem: str) -> Path:
     )
 
 
-def analyze_inputs(input_path: str | Path, grid: GridConfig = GridConfig()) -> dict[str, Any]:
+def analyze_inputs(input_path: str | Path) -> dict[str, Any]:
+    """Inspect source-image dimensions without inventing a crop plan.
+
+    Candidate masks are intentionally required before planning because their
+    robust instance-count median controls the per-image grid.
+    """
     images = list_images(input_path)
     rows = []
-    shapes = []
     for path in images:
         shape = read_image(path).shape[:2]
-        shapes.append(shape)
         rows.append({"image": str(path.resolve()), "image_id": path.stem, "shape": list(shape)})
-    reference = infer_grid_reference(shapes)
-    total = 0
-    for row in rows:
-        patches = build_grid(row["image_id"], tuple(row["shape"]), reference, grid)
-        row["grid"] = [patches[0].rows, patches[0].cols]
-        row["patch_count"] = len(patches)
-        total += len(patches)
     return {
         "image_count": len(images),
-        "grid_reference": {"height": reference.height, "width": reference.width},
+        "images": rows,
+    }
+
+
+def analyze_workspace(
+    input_path: str | Path,
+    candidate_root: str | Path,
+    *,
+    models: Iterable[str] = DEFAULT_MODELS,
+    grid: GridConfig = GridConfig(),
+) -> dict[str, Any]:
+    """Create a GT-free per-image preflight after candidate masks exist."""
+    models = list(models)
+    images = list_images(input_path)
+    candidate_root = Path(candidate_root).resolve()
+    rows = []
+    total = 0
+    warnings = []
+    for image_path in images:
+        image = read_image(image_path)
+        image_id = image_path.stem
+        mask_paths = {
+            model: _mask_path(candidate_root, model, image_id) for model in models
+        }
+        masks = {model: read_mask(path) for model, path in mask_paths.items()}
+        plan = plan_grid(image.shape[:2], masks, grid)
+        if plan.candidate_counts.disagreement_warning:
+            warnings.append(f"{image_id}: {plan.candidate_counts.disagreement_warning}")
+        rows.append(
+            {
+                "image": str(image_path.resolve()),
+                "image_id": image_id,
+                "shape": list(image.shape[:2]),
+                "grid": [plan.rows, plan.cols],
+                "patch_count": plan.patch_count,
+                "expected_cells_per_core": plan.expected_cells_per_core,
+                "grid_plan": plan.to_dict(),
+            }
+        )
+        total += plan.patch_count
+    return {
+        "image_count": len(images),
+        "models": models,
+        "grid_config": grid.__dict__,
+        "vlm_panel_shape": [grid.vlm_panel_size, grid.vlm_panel_size],
         "patch_count": total,
         "images": rows,
+        "warnings": warnings,
     }
 
 
@@ -76,14 +117,11 @@ def prepare_workspace(
     candidate_root = Path(candidate_root).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     images = list_images(input_path)
-    arrays = {path.stem: read_image(path) for path in images}
-    reference = infer_grid_reference(array.shape[:2] for array in arrays.values())
     manifest: dict[str, Any] = {
         "manifest_version": MANIFEST_VERSION,
         "target": target,
         "modality": modality,
         "models": models,
-        "grid_reference": {"height": reference.height, "width": reference.width},
         "grid_config": grid.__dict__,
         "images": [],
         "patches": [],
@@ -92,19 +130,22 @@ def prepare_workspace(
     cropped_masks_root = output_dir / "candidate_crops"
     for image_path in images:
         image_id = image_path.stem
-        image = arrays[image_id]
+        image = read_image(image_path)
         mask_paths = {
             model: _mask_path(candidate_root, model, image_id) for model in models
         }
         full_masks = {model: read_mask(path) for model, path in mask_paths.items()}
         if any(mask.shape != image.shape[:2] for mask in full_masks.values()):
             raise ValueError(f"{image_id}: candidate mask shape differs from raw image")
-        patches = build_grid(image_id, image.shape[:2], reference, grid)
+        grid_plan = plan_grid(image.shape[:2], full_masks, grid)
+        patches = build_grid(image_id, image.shape[:2], grid_plan, grid)
         manifest["images"].append(
             {
                 "image_id": image_id,
                 "image_path": str(image_path.resolve()),
                 "shape": list(image.shape[:2]),
+                "grid": [grid_plan.rows, grid_plan.cols],
+                "grid_plan": grid_plan.to_dict(),
                 "full_candidate_masks": {
                     model: str(path) for model, path in mask_paths.items()
                 },
@@ -124,6 +165,7 @@ def prepare_workspace(
                 patch.patch_id,
                 reference_crop,
                 crop_masks,
+                panel_size=grid.vlm_panel_size,
             )
             manifest["patches"].append(
                 {
@@ -134,6 +176,7 @@ def prepare_workspace(
                         model: str(path) for model, path in candidate_paths.items()
                     },
                     "candidate_masks": patch_mask_paths,
+                    "vlm_panel_shape": [grid.vlm_panel_size, grid.vlm_panel_size],
                 }
             )
     manifest_path = output_dir / "run_manifest.json"

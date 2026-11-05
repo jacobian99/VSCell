@@ -111,21 +111,24 @@ For every prompt and execution path, see the
 
 ## Example results
 
-Five curated CellBinDB crops show the reference image, held-out GT overlay,
-VSCell output, and all four candidate models before installation. GT is used
-only for this retrospective comparison—not by the VSCell workflow. Across
-these examples, VSCell is comparable to the best individual candidate model
-and outperforms it in most cases. See the full [example-results
-gallery](examples/example_results/) and the individual per-method visual crops.
+Five CellBinDB crops show the reference image, held-out GT overlay, VSCell
+output, and all four candidate models before installation. GT is used only for
+this retrospective comparison—not by the VSCell workflow. In each selected
+row, VSCell has the highest post-hoc held-out P score. See the full
+[example-results gallery](examples/example_results/) and the individual
+per-method visual crops.
 
-![Representative VSCell comparison](examples/example_results/comparison/01_ssdna_w4.png)
+![Five VSCell comparisons](examples/example_results/comparison/VSCell_5x7_spaced_metrics.png)
 
 ## What VSCell does
 
 1. Uses existing full-image candidate masks or runs four built-in segmentation
    backends: Cellpose, StarDist, CellSAM, and Cellpose-SAM.
-2. Divides each image into adaptive, padded crops.
-3. Renders anonymous candidate overlays for each crop.
+2. Uses the median instance count across the full-image candidate masks to
+   divide each image into adaptive, padded crops, targeting about five cells
+   per core (soft range: 3–10) while preserving source geometry.
+3. Renders anonymous candidate overlays for each crop and fit/pads each
+   reference/overlay panel to 256×256 for the VLM only.
 4. Ranks a user-selected fraction of crops three times with GPT-5.5, GPT-6
    Astra, or Claude Fable 5.1 and combines the rankings by Borda score.
 5. Optionally trains a student ranker and predicts rankings for the remaining

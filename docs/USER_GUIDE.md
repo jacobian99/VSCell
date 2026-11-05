@@ -41,16 +41,21 @@ validation performed before release.
 
 1. Run the built-in Cellpose, StarDist, CellSAM, and Cellpose-SAM backends, or
    provide full-image instance masks from at least three segmentation models.
-2. Analyze the dataset's image-size distribution and create adaptive square-like
-   local crops. Typical images use 4×4; unusually large or rectangular images
-   scale each axis independently.
-3. Enlarge each grid cell by the historical `PAD=0.10`: 10% total side-length
-   increase, approximately 5% on each side.
+2. Count instances in each full-image candidate mask, take the robust median,
+   and create a per-image grid targeting five cells per core (acceptable range:
+   roughly 3–10). The grid respects source geometry: a square image receives a
+   square grid, while a rectangular image receives near-square cores with rows
+   and columns adjusted to its aspect ratio.
+3. Enlarge each grid cell by the default `padding_fraction=0.10`: 10% total
+   side-length increase, approximately 5% on each side.
 4. Render the reference crop and anonymous yellow-fill/green-boundary candidate
-   overlays.
+   overlays, then fit/pad every complete panel to the same 256×256 VLM input.
+   This display normalization does not resize or alter the native masks used
+   for consensus and stitching.
 5. Rank a user-selected random fraction with GPT-5.5 (default), GPT-6 Astra, or
    Claude Fable 5.1. Each patch is shuffled and ranked three times, then combined
-   by Borda score.
+   by Borda score. The teacher fraction is applied to the total planned patches
+   across all images, not separately to each source image.
 6. Optionally train the identity-blind student ranker from teacher-ranked crops
    and predict the remaining crops. A 0% teacher run requires a compatible
    pretrained student checkpoint.
@@ -579,14 +584,17 @@ Assume raw images are in `data/`, full-image candidate masks will be in
 ```bash
 vscell plan \
   --input data \
+  --candidates segmentation_results \
   --teacher-fraction 0.25 \
   --vlm-model gpt-5.5
 ```
 
-The displayed estimate is the projected total for the selected teacher subset,
-not the cost of one repetition. Historical empirical costs already include all
-three repetitions per teacher patch; actual token usage is recorded by the
-provider adapter. The estimate is not a live provider quote.
+`vscell plan` derives each crop grid from the full-image candidate masks, so it
+is run after candidate masks exist. The displayed estimate is the projected
+total for the selected teacher subset, not the cost of one repetition.
+Historical empirical costs already include all three repetitions per teacher
+patch; actual token usage is recorded by the provider adapter. The estimate is
+not a live provider quote.
 
 ### 2. Run the four full-image backends or provide existing masks
 

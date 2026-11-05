@@ -24,36 +24,37 @@ The displayed score is the post-hoc held-out metric
 `P = (F1@0.50 + mean matched-cell IoU) / 2`. Ground truth was **not** supplied
 to any VSCell inference, ranking, consensus, or stitching step; it was used
 only after inference to prepare this visual comparison. These selected examples
-are illustrative, not an aggregate benchmark or a claim that VSCell always
-outperforms every individual candidate model.
+are illustrative, not an aggregate benchmark. VSCell is the row winner in
+these selected examples; this does not claim it always outperforms every
+individual candidate model.
 
 | Crop | Modality | VSCell P | Per-image best single model | Delta |
 |---|---|---:|---:|---:|
-| W4 | ssDNA | 0.6851 | Cellpose-SAM, 0.6711 | +0.0140 |
-| X5 | ssDNA | 0.7995 | Cellpose-SAM, 0.7791 | +0.0204 |
-| Y96476U4 | DAPI | 0.6878 | Cellpose-SAM, 0.6968 | -0.0090 |
-| Y96476V7 | DAPI | 0.8470 | Cellpose, 0.8347 | +0.0123 |
-| liver | DAPI | 0.6792 | CellSAM, 0.6678 | +0.0114 |
+| Y96476V7 (7516, 10406) | DAPI | 0.8528 | Cellpose, 0.8347 | +0.0181 |
+| Y96476U4 (24456, 14466) | DAPI | 0.6611 | Cellpose-SAM, 0.6567 | +0.0044 |
+| liver (14224, 6778) | DAPI | 0.6708 | CellSAM, 0.6678 | +0.0030 |
+| X5 (15842, 7830) | ssDNA | 0.8210 | Cellpose-SAM, 0.7791 | +0.0419 |
+| Y96476V7 (14776, 4316) | DAPI | 0.8280 | Cellpose, 0.8254 | +0.0026 |
 
-## ssDNA W4
+## DAPI Y96476V7 (7516, 10406)
 
-![ssDNA W4 comparison](comparison/01_ssdna_w4.png)
+![DAPI Y96476V7 comparison](comparison/01_dapi_y96476v7_7516_10406.png)
 
-## ssDNA X5
+## DAPI Y96476U4 (24456, 14466)
 
-![ssDNA X5 comparison](comparison/02_ssdna_x5.png)
+![DAPI Y96476U4 comparison](comparison/02_dapi_y96476u4_24456_14466.png)
 
-## DAPI Y96476U4
+## DAPI liver (14224, 6778)
 
-![DAPI Y96476U4 comparison](comparison/03_dapi_u4.png)
+![DAPI liver comparison](comparison/03_dapi_liver_14224_6778.png)
 
-## DAPI Y96476V7
+## ssDNA X5 (15842, 7830)
 
-![DAPI Y96476V7 comparison](comparison/04_dapi_v7.png)
+![ssDNA X5 comparison](comparison/04_ssdna_x5_15842_7830.png)
 
-## DAPI liver
+## DAPI Y96476V7 (14776, 4316)
 
-![DAPI liver comparison](comparison/05_dapi_liver.png)
+![DAPI Y96476V7 comparison](comparison/05_dapi_y96476v7_14776_4316.png)
 
 ## Data reference
 
