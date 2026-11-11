@@ -13,23 +13,21 @@ quick start, see the [main README](../README.md).
 - [Prepare data before running](#prepare-data-before-running-offline)
 - [Guided workflow](#guided-workflow-recommended)
 - [Advanced manual workflow](#advanced-manual-workflow)
-- [Local five-image demo](#local-five-image-cellbindb-demo)
+- [Local four-image demo](#local-four-image-cellbindb-demo)
 
 VSCell ranks multiple candidate cell-segmentation masks with a vision-language
 model (VLM) or a distilled student ranker, applies a GT-free consensus
-ensemble, and stitches local results into a globally labelled
-full-image instance mask.
+ensemble, and stitches local results into a globally labelled full-image
+instance mask. Shared seams are resolved from the neighboring patches' local
+rankings.
 
 VSCell runs segmentation models once on each full image; their masks are cropped
 afterward. VSCell
 does not rerun heavy segmentation models for every local crop and never needs
 segmentation ground truth at inference time.
 
-[`VALIDATION.md`](VALIDATION.md) records the local package-level and no-API end-to-end
-validation performed before release.
-
 > Development status: this is a pre-release package. Raw validation/demo image
-> files are not redistributed. The repository includes five rendered
+> files are not redistributed. The repository includes four rendered
 > CellBinDB display panels under `examples/example_results/`.
 
 ## Pipeline
@@ -495,7 +493,7 @@ scripts record the user-selected account, partition, and executable paths. They
 contain no provider key, but they should remain local rather than be committed
 or shared if paths or cluster metadata are sensitive. Runtime outputs, logs,
 credentials, local demo images, and third-party weights are excluded
-by the repository ignore rules and are not part of the built wheel. The five
+by the repository ignore rules and are not part of the built wheel. The four
 included rendered display panels in `examples/example_results/` are static
 GitHub documentation assets, not runtime data or package inputs.
 
@@ -814,11 +812,15 @@ Primary outputs are:
   configuration value, and the explicit statement that segmentation GT was not
   used.
 
-## Local five-image CellBinDB demo
+Local consensus masks are retained away from seams. For each horizontal or
+vertical adjacent patch pair, VSCell compares the two local top-ranked
+candidates using their ranks in both patches, then uses the selected candidate
+to resolve instances spanning that shared seam.
 
-Five 256×256 ssDNA images were selected from prior results across kidney, heart,
-uterus, liver, and brain. They are available in the existing local CellBinDB
-copy, so no download is needed:
+## Local four-image CellBinDB demo
+
+Four 256×256 CellBinDB examples matching the rendered display gallery are
+available in an existing local CellBinDB copy, so no download is needed:
 
 ```bash
 python examples/prepare_cellbindb_demo.py \
@@ -827,6 +829,6 @@ python examples/prepare_cellbindb_demo.py \
 ```
 
 `examples/data/` is gitignored. The full raw CellBinDB demo files remain local.
-The repository contains only the five rendered display
+The repository contains only the four rendered display
 panels in `examples/example_results/`; their data reference and post-hoc-only
 evaluation role are documented with the assets.

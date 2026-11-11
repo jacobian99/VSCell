@@ -16,16 +16,18 @@ one full-image, globally labelled instance mask for every input image.
 
 > Development status: pre-release (`0.1.0.dev0`). Raw validation image files,
 > third-party weights, credentials, and runtime outputs are not redistributed.
-> Five rendered CellBinDB display panels are documented below.
+> Four rendered CellBinDB display panels are documented below.
 
 ## How VSCell works
 
 VSCell starts with one full-image mask from each candidate segmentation model.
 It matches each image with its candidate-mask overlays, makes local patches, and
 asks a hosted VLM to rank an anonymized subset. An optional distilled student
-ranker extends those rankings to the remaining patches. The consensus
-module then reconciles candidate instances and stitches the patch results into
-one full-image labelled mask.
+ranker extends those rankings to the remaining patches. The consensus module
+then reconciles candidate instances and stitches the patch results into one
+full-image labelled mask. At a shared patch boundary, VSCell compares the two
+neighboring patches' top-ranked candidates and uses that local decision to
+resolve boundary-spanning instances.
 
 ![VSCell workflow: candidate segmentation, patch ranking, consensus ensemble, and full-image mask](docs/assets/vscell-workflow.png)
 
@@ -111,14 +113,13 @@ For every prompt and execution path, see the
 
 ## Example results
 
-Five CellBinDB crops show the reference image, held-out GT overlay, VSCell
+Four CellBinDB crops show the reference image, held-out GT overlay, VSCell
 output, and all four candidate models before installation. GT is used only for
-this retrospective comparison—not by the VSCell workflow. In each selected
-row, VSCell has the highest post-hoc held-out P score. See the full
+this retrospective comparison—not by the VSCell workflow. See the full
 [example-results gallery](examples/example_results/) and the individual
 per-method visual crops.
 
-![Five VSCell comparisons](examples/example_results/comparison/VSCell_5x7_spaced_metrics.png)
+![Four VSCell comparisons](examples/example_results/comparison/VSCell_4x7_spaced_metrics.png)
 
 ## What VSCell does
 
@@ -134,8 +135,9 @@ per-method visual crops.
 5. Optionally trains a student ranker and predicts rankings for the remaining
    crops.
 6. Applies local consensus selection and boundary refinement.
-7. Stitches the selected instances into a full-image labelled mask and writes a
-   complete decision audit.
+7. Stitches local consensus masks into a full-image labelled mask, resolving
+   shared seams from adjacent-patch rankings, and writes a complete decision
+   audit.
 
 VSCell automatically fills the prompt target wording, determines candidate
 count `N`, anonymizes candidates, and generates the strict ranking format. The
