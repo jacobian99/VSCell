@@ -1,4 +1,4 @@
-"""Validated configuration and built-in modality metadata."""
+"""VSCell configuration and built-in modality metadata."""
 
 from __future__ import annotations
 
@@ -39,9 +39,9 @@ MODEL_IDS = {
     "claude-fable-5-1": "claude-fable-5-1",
 }
 
-# Empirical dollars per ranked patch, already including three repetitions.
-# These are historical planning values; actual usage is reported separately.
-HISTORICAL_COST_PER_PATCH = {
+# Estimated dollars per ranked patch, already including three repetitions.
+# Actual provider usage is reported separately.
+ESTIMATED_COST_PER_PATCH = {
     "gpt-5.5": 20.87682 / 100.0,
     "gpt-6-astra": 4.5877 / 40.0,
     "claude-fable-5-1": 3.7301 / 40.0,
@@ -167,7 +167,7 @@ class RunConfig:
         if not 0 <= self.teacher_fraction <= 1:
             raise ValueError("teacher_fraction must be in [0, 1]")
         if self.repetitions != 3:
-            raise ValueError("the validated VSCell pipeline uses exactly 3 repetitions")
+            raise ValueError("VSCell uses exactly 3 ranking repetitions")
         if len(self.models) < 3 or len(set(self.models)) != len(self.models):
             raise ValueError("models must contain at least 3 unique candidates")
         canonical = MODEL_IDS.get(self.vlm_model.lower(), self.vlm_model)
@@ -184,7 +184,7 @@ class RunConfig:
         return value
 
     def estimated_teacher_cost(self, patch_count: int) -> float | None:
-        per_patch = HISTORICAL_COST_PER_PATCH.get(self.vlm_model)
+        per_patch = ESTIMATED_COST_PER_PATCH.get(self.vlm_model)
         if per_patch is None:
             return None
         teacher_patches = round(int(patch_count) * self.teacher_fraction)

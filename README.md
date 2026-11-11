@@ -3,8 +3,8 @@
 VSCell creates full-image instance-segmentation masks by ranking and combining
 candidate masks from multiple segmentation models. A hosted vision-language
 model (VLM), or an optional distilled student ranker, chooses among anonymous
-candidate overlays; VSCell then applies its GT-free consensus method and
-stitches the local results into one globally labelled mask.
+candidate overlays; VSCell then applies local consensus selection and boundary
+refinement, then stitches the local results into one globally labelled mask.
 
 Segmentation ground truth is never required at inference time. Segmentation
 models run once on each full image, not once per crop.
@@ -16,14 +16,14 @@ one full-image, globally labelled instance mask for every input image.
 
 > Development status: pre-release (`0.1.0.dev0`). Raw validation image files,
 > third-party weights, credentials, and runtime outputs are not redistributed.
-> The five approved rendered CellBinDB display panels are documented below.
+> Five rendered CellBinDB display panels are documented below.
 
 ## How VSCell works
 
 VSCell starts with one full-image mask from each candidate segmentation model.
 It matches each image with its candidate-mask overlays, makes local patches, and
 asks a hosted VLM to rank an anonymized subset. An optional distilled student
-ranker extends those rankings to the remaining patches. The GT-free consensus
+ranker extends those rankings to the remaining patches. The consensus
 module then reconciles candidate instances and stitches the patch results into
 one full-image labelled mask.
 
@@ -133,7 +133,7 @@ per-method visual crops.
    Astra, or Claude Fable 5.1 and combines the rankings by Borda score.
 5. Optionally trains a student ranker and predicts rankings for the remaining
    crops.
-6. Applies the GT-free Solution 08 consensus and boundary refinement.
+6. Applies local consensus selection and boundary refinement.
 7. Stitches the selected instances into a full-image labelled mask and writes a
    complete decision audit.
 
@@ -296,11 +296,7 @@ by the workflow. Accuracy evaluation remains a separate held-out analysis.
 
 - [Complete user guide](docs/USER_GUIDE.md) — detailed installation, every
   guided prompt, data validation, Slurm behavior, student training, manual
-  commands, scientific defaults, and troubleshooting context.
-- [Method and code provenance](docs/PROVENANCE.md) — mapping from validated
-  experiments to packaged modules and intentional integration changes.
-- [Validation record](docs/VALIDATION.md) — automated tests and end-to-end
-  package checks.
+  commands, configuration, and troubleshooting context.
 - [Third-party notices](THIRD_PARTY_NOTICES.md) — upstream software, model,
   weight, dataset, and hosted-service terms.
 

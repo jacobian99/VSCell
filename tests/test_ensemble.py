@@ -1,6 +1,6 @@
 import numpy as np
 
-from vscell.ensemble import select_solution08, vscell_consensus
+from vscell.ensemble import select_consensus_instances, vscell_consensus
 
 
 def _mask(anchor=True, residual=True):
@@ -12,7 +12,7 @@ def _mask(anchor=True, residual=True):
     return result
 
 
-def test_solution08_keeps_supported_anchor_and_adds_peer_consensus():
+def test_consensus_keeps_supported_anchor_and_adds_peer_instances():
     predictions = {
         "anchor": _mask(anchor=True, residual=False),
         "peer1": _mask(),
@@ -20,7 +20,7 @@ def test_solution08_keeps_supported_anchor_and_adds_peer_consensus():
         "peer3": _mask(anchor=False, residual=True),
     }
     ranking = ["anchor", "peer1", "peer2", "peer3"]
-    selected, audit = select_solution08(predictions, ranking)
+    selected, audit = select_consensus_instances(predictions, ranking)
     assert int(selected.max()) == 2
     assert audit["anchor_model"] == "anchor"
     assert audit["actions"]["new_over_null"] == 1
@@ -29,7 +29,7 @@ def test_solution08_keeps_supported_anchor_and_adds_peer_consensus():
     assert final_audit["selected_cells_after_refinement"] == 2
 
 
-def test_solution08_is_gt_free_signature():
+def test_consensus_is_gt_free_signature():
     predictions = {name: _mask() for name in ("a", "b", "c", "d")}
     final, _ = vscell_consensus(predictions, ["a", "b", "c", "d"])
     assert final.shape == (20, 20)

@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from .config import HISTORICAL_COST_PER_PATCH, MODEL_IDS, Target
+from .config import ESTIMATED_COST_PER_PATCH, MODEL_IDS, Target
 from .prompts import system_prompt, user_content
 from .ranking import borda_aggregate, parse_ranking, shuffled_mapping
 
@@ -39,7 +39,7 @@ def estimated_cost(model: str, patch_count: int, teacher_fraction: float = 1.0) 
     model = canonical_model(model)
     if not 0 <= teacher_fraction <= 1:
         raise ValueError("teacher_fraction must be in [0, 1]")
-    rate = HISTORICAL_COST_PER_PATCH.get(model)
+    rate = ESTIMATED_COST_PER_PATCH.get(model)
     if rate is None:
         return None
     return round(round(patch_count * teacher_fraction) * rate, 4)

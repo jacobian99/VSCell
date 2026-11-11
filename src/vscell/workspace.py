@@ -257,7 +257,7 @@ def finalize_workspace(
     *,
     ensemble: EnsembleConfig = EnsembleConfig(),
 ) -> dict[str, Any]:
-    """Run Solution 08 per patch, then stitch and globally relabel images."""
+    """Run local consensus per patch, then stitch and globally relabel images."""
     manifest_path = Path(manifest_path).resolve()
     output_dir = manifest_path.parent
     manifest = load_manifest(manifest_path)

@@ -152,7 +152,7 @@ def user_content(
     labels = _labels(count)
     if list(mapping) != labels or set(mapping.values()) != set(candidate_paths):
         raise ValueError("candidate paths and anonymized mapping are inconsistent")
-    singular, plural, ground_truth_phrase, _ = TARGET_PHRASES[target]
+    singular, plural, reference_target_phrase, _ = TARGET_PHRASES[target]
     label_csv = ", ".join(labels[:-1]) + ", " + labels[-1]
     number = {4: "four", 5: "five", 6: "six"}.get(count, str(count))
     criteria = (
@@ -186,9 +186,9 @@ def user_content(
         {
             "type": "text",
             "text": (
-                "REFERENCE IMAGE -- study this first; treat the "
-                f"{ground_truth_phrase} here as the ground truth for what should be "
-                "segmented:"
+                "REFERENCE IMAGE -- study this first; use the "
+                f"{reference_target_phrase} visible here as the visual target for "
+                "segmentation:"
             ),
         },
         {"type": "image_url", "image_url": {"url": data_url(reference_path)}},

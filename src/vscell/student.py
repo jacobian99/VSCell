@@ -330,7 +330,7 @@ def train_student(
             borda = torch.stack([rows[index]["borda"] for index in indices])
             pairwise = torch.stack([rows[index]["pairwise"] for index in indices])
             if optimize:
-                # Historical synchronized D4-like augmentation: the reference
+                # Apply the same spatial augmentation to the reference
                 # and every candidate receive the same spatial transform.
                 rotations = rng.randrange(4)
                 reference = torch.rot90(reference, rotations, dims=(-2, -1))

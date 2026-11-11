@@ -14,27 +14,22 @@ quick start, see the [main README](../README.md).
 - [Guided workflow](#guided-workflow-recommended)
 - [Advanced manual workflow](#advanced-manual-workflow)
 - [Local five-image demo](#local-five-image-cellbindb-demo)
-- [Scientific defaults](#scientific-defaults)
-- [Tests](#tests)
 
 VSCell ranks multiple candidate cell-segmentation masks with a vision-language
-model (VLM) or a distilled student ranker, applies the paper's GT-free Solution
-08 consensus ensemble, and stitches local results into a globally labelled
+model (VLM) or a distilled student ranker, applies a GT-free consensus
+ensemble, and stitches local results into a globally labelled
 full-image instance mask.
 
-The package is an integration of the validated research pipeline. Segmentation
-models run once on each full image; their masks are cropped afterward. VSCell
+VSCell runs segmentation models once on each full image; their masks are cropped
+afterward. VSCell
 does not rerun heavy segmentation models for every local crop and never needs
 segmentation ground truth at inference time.
 
-[`PROVENANCE.md`](PROVENANCE.md) maps each packaged module to the validated experiment code
-from which it was ported and lists the few intentional GT-free integration
-changes.
 [`VALIDATION.md`](VALIDATION.md) records the local package-level and no-API end-to-end
 validation performed before release.
 
 > Development status: this is a pre-release package. Raw validation/demo image
-> files are not redistributed. The repository includes five approved rendered
+> files are not redistributed. The repository includes five rendered
 > CellBinDB display panels under `examples/example_results/`.
 
 ## Pipeline
@@ -59,7 +54,7 @@ validation performed before release.
 6. Optionally train the identity-blind student ranker from teacher-ranked crops
    and predict the remaining crops. A 0% teacher run requires a compatible
    pretrained student checkpoint.
-7. Apply Solution 08 anchor-consensus selection and boundary refinement locally.
+7. Apply local consensus selection and boundary refinement.
 8. Use the image-level Borda winner for cells spanning multiple crop cores, use
    local VSCell results elsewhere, merge, and assign new global instance labels.
 
@@ -416,7 +411,7 @@ can be resumed.
 | `Slurm CPU partition` | Queue for the CPU hosted-VLM ranking job. It is requested only when hosted ranking uses Slurm. |
 | `Slurm GPU partition` | Queue for built-in segmentation jobs and/or the one-GPU student train/predict job. |
 | `Conda initialization script` | Path to `conda.sh`, needed only when VSCell must launch the isolated built-in segmentation environments. |
-| `Start this workflow?` | Final authorization after reviewing images, patches, calls, historical cost, resources, privacy, and output paths. Pressing Enter selects the safe default `N`; no job or hosted call starts. |
+| `Start this workflow?` | Final authorization after reviewing images, patches, calls, estimated cost, resources, privacy, and output paths. Pressing Enter selects the safe default `N`; no job or hosted call starts. |
 | Provider API key | Requested through a hidden prompt immediately before hosted inference. Paste the raw key without single or double quote characters. It is not written to workflow state, scripts, or logs. |
 
 Advanced resource overrides are available as command-line flags, including
@@ -459,7 +454,7 @@ privacy requirements, and whether a suitable student checkpoint is available.
 
 Before any job submission or hosted call, it displays one summary containing
 the image and patch counts, selected models, three-repetition call count,
-historical cost estimate, worker count, Slurm resources, privacy behavior, and
+estimated cost, worker count, Slurm resources, privacy behavior, and
 final output path. Nothing starts until the user confirms that summary.
 
 The preflight summary explicitly reports which provider environment-variable
@@ -499,9 +494,9 @@ Local runtime files do contain operational information needed to resume a run:
 scripts record the user-selected account, partition, and executable paths. They
 contain no provider key, but they should remain local rather than be committed
 or shared if paths or cluster metadata are sensitive. Runtime outputs, logs,
-credentials, unapproved local demo images, and third-party weights are excluded
+credentials, local demo images, and third-party weights are excluded
 by the repository ignore rules and are not part of the built wheel. The five
-approved rendered display panels in `examples/example_results/` are static
+included rendered display panels in `examples/example_results/` are static
 GitHub documentation assets, not runtime data or package inputs.
 
 Slurm execution is continuous by default. After displaying the submitted job
@@ -592,7 +587,7 @@ vscell plan \
 `vscell plan` derives each crop grid from the full-image candidate masks, so it
 is run after candidate masks exist. The displayed estimate is the projected
 total for the selected teacher subset, not the cost of one repetition.
-Historical empirical costs already include all three repetitions per teacher
+The cost estimate already includes all three repetitions per teacher
 patch; actual token usage is recorded by the provider adapter. The estimate is
 not a live provider quote.
 
@@ -832,24 +827,6 @@ python examples/prepare_cellbindb_demo.py \
 ```
 
 `examples/data/` is gitignored. The full raw CellBinDB demo files remain local.
-The repository contains only the five separately approved rendered display
+The repository contains only the five rendered display
 panels in `examples/example_results/`; their data reference and post-hoc-only
 evaluation role are documented with the assets.
-
-## Scientific defaults
-
-Solution 08 uses anchor support IoU 0.50, residual complete-link IoU 0.50,
-support from two distinct peers, anchor-null threshold 0.10, refinement IoU
-0.50, and two other refining peers. `minimum_area=1` reproduces the GT-free
-full-image Figure 2 run. No ground-truth mask is accepted by the inference API.
-
-## Tests
-
-```bash
-python -m pytest
-```
-
-Tests cover adaptive grid examples, historical padding, deterministic ranking,
-Solution 08 selection, boundary-aware stitching, prompts, and a synthetic
-workspace round trip. Instance relabeling is also checked to guarantee that a
-single numeric label cannot represent disconnected cells.

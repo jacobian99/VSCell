@@ -1,9 +1,4 @@
-"""GT-free VSCell Solution 08 anchor-consensus selection.
-
-This is a package-native port of the final paper-facing selector in
-``08_anchor_con_selection/evaluate_08_anchor_con_selection.py``. Ground truth
-is neither accepted nor consulted.
-"""
+"""GT-free anchor-consensus selection for VSCell."""
 
 from __future__ import annotations
 
@@ -165,12 +160,12 @@ def _strict_residual_clusters(
     }
 
 
-def select_solution08(
+def select_consensus_instances(
     predictions: dict[str, np.ndarray],
     ranking: Sequence[str],
     config: EnsembleConfig = EnsembleConfig(),
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    """Select instances using final Solution 08 before boundary refinement."""
+    """Select instances by anchor consensus before boundary refinement."""
     order = list(ranking)
     if len(order) < 3 or set(order) != set(predictions):
         raise ValueError("ranking must contain every prediction model exactly once")
@@ -336,7 +331,7 @@ def select_solution08(
 
     support_histogram = Counter(len(items) for items in anchor_supporters)
     audit = {
-        "policy": "08_anchor_con_selection",
+        "policy": "anchor_consensus",
         "anchor_model": order[0],
         "config": asdict(config),
         "valid_anchor_cells": len(anchors),
@@ -371,7 +366,7 @@ def refine_boundaries(
     candidate_masks: Sequence[np.ndarray],
     config: EnsembleConfig = EnsembleConfig(),
 ) -> np.ndarray:
-    """Apply the historical corroborating-peer boundary refinement."""
+    """Apply corroborating-peer boundary refinement."""
     output = np.zeros_like(selected, dtype=np.int32)
     next_id = 1
     for instance_id in np.unique(selected):
@@ -418,7 +413,7 @@ def vscell_consensus(
     ranking: Sequence[str],
     config: EnsembleConfig = EnsembleConfig(),
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    selected, audit = select_solution08(predictions, ranking, config)
+    selected, audit = select_consensus_instances(predictions, ranking, config)
     refined = refine_boundaries(
         selected, [predictions[model] for model in ranking], config
     )

@@ -92,7 +92,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
         args.vlm_model, analysis["patch_count"], args.teacher_fraction
     )
     analysis["cost_estimate_note"] = (
-        "Historical empirical total for all three repetitions per teacher patch; "
+        "Estimated total for all three repetitions per teacher patch; "
         "not a live provider quote."
     )
     print(json.dumps(analysis, indent=2))
@@ -185,7 +185,7 @@ def _cmd_rank_teacher(args: argparse.Namespace) -> int:
     preflight = (
         f"teacher_patches={len(teacher)} repetitions=3 api_calls={len(teacher) * 3} "
         f"workers={args.workers} "
-        "historical_estimated_total_cost_usd="
+        "estimated_total_cost_usd="
         f"{projected if projected is not None else 'unknown'} "
         "(covers_all_3_repetitions=true)"
     )
@@ -925,7 +925,7 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
 
 def _print_guided_summary(config: dict, plan: dict) -> None:
     estimate = plan["estimated_total_vlm_cost_usd"]
-    estimate_text = "unknown" if estimate is None else f"${estimate:.4f} historical estimate"
+    estimate_text = "unknown" if estimate is None else f"${estimate:.4f} estimated total"
     print("\nVSCell guided-run summary", file=sys.stderr)
     print(f"  Raw images:       {config['input']} ({plan['image_count']} image(s))", file=sys.stderr)
     print(
@@ -1795,7 +1795,7 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--seed", type=int, default=120912)
     predict.set_defaults(func=_cmd_predict_student)
 
-    finalize = sub.add_parser("finalize", help="run Solution 08 and stitch final masks")
+    finalize = sub.add_parser("finalize", help="run consensus selection and stitch final masks")
     finalize.add_argument("--manifest", required=True)
     finalize.add_argument("--rankings", required=True)
     finalize.add_argument("--minimum-area", type=int, default=1)
