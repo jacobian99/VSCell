@@ -60,9 +60,12 @@ segmentation ground truth at inference time.
 
 The user selects `nuclear` or `whole_cell` in the guided menu (or supplies
 `--target` in a non-interactive command). VSCell then fills the prompt's target
-wording automatically. It discovers the candidate models, calculates candidate
-count `N`, generates anonymous labels, and constructs the strict ranking format;
-users never edit `<TARGET>`, `<N>`, labels, or other prompt placeholders.
+wording automatically. Standard aliases such as `nucleus`, `nuclei`,
+`whole cells`, and `wholecells` normalize to these same two built-in target
+modes.
+VSCell discovers the candidate models, calculates candidate count `N`, generates
+anonymous labels, and constructs the strict ranking format; users never edit
+`<TARGET>`, `<N>`, labels, or other prompt placeholders.
 
 These target-aware descriptions are built into the software:
 
@@ -125,6 +128,30 @@ let VSCell generate a generic target-aware description.
 If a target conflicts with a built-in modality preset, VSCell stops before an
 API call unless an explicit custom modality description is supplied; this
 prevents internally contradictory prompts.
+
+### Additional target labels
+
+`nuclear` and `whole_cell` are the two built-in target modes. Any other
+`--target` label is accepted for VLM ranking only when accompanied by a
+non-empty `--target-description`. The description is added to the existing
+ranking prompt as the definition of one desired instance. For example:
+
+```bash
+vscell run \
+  --input data \
+  --output run \
+  --target glomerulus \
+  --target-description "Segment each complete glomerulus as one instance; include the tuft and exclude surrounding tubules." \
+  --modality "PAS histology" \
+  --modality-description "PAS-stained histology with magenta basement membranes and variable tissue texture." \
+  --candidate-source existing \
+  --non-interactive --yes
+```
+
+This is an additive prompt feature: it does not change the built-in candidate
+models, their preprocessing, or their `nuclear`/`whole_cell` modes. Custom
+targets therefore require precomputed candidate masks (`--candidate-source
+existing`); VSCell does not submit its four built-in backends for them.
 
 For DAPI and H&E nuclear images, a raw-image-only run is supported: choose the
 `slurm` candidate source and VSCell submits Cellpose, StarDist, CellSAM, and

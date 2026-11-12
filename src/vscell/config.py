@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 
-Target = Literal["nuclear", "whole_cell"]
+# The built-in candidate generators support these two target modes.  The VLM
+# ranking workflow can additionally rank a user-defined target when it has a
+# description.
+Target = str
+BuiltInTarget = Literal["nuclear", "whole_cell"]
+STANDARD_TARGETS: tuple[BuiltInTarget, BuiltInTarget] = ("nuclear", "whole_cell")
 
 DEFAULT_MODELS = ("cellpose", "stardist", "cellsam", "cellpose_sam")
 
@@ -65,6 +70,48 @@ def normalize_modality(value: str) -> str:
         "dic": "DIC",
     }
     return aliases.get(key, value.strip())
+
+
+def normalize_target(value: str) -> str:
+    """Canonicalize standard target variants while preserving custom labels."""
+    label = value.strip()
+    key = label.lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "nuclear": "nuclear",
+        "nucleus": "nuclear",
+        "nuclei": "nuclear",
+        "nuclears": "nuclear",
+        "whole_cell": "whole_cell",
+        "whole_cells": "whole_cell",
+        "wholecell": "whole_cell",
+        "wholecells": "whole_cell",
+        "cell_body": "whole_cell",
+        "cell_bodies": "whole_cell",
+    }
+    return aliases.get(key, label)
+
+
+def resolve_target(
+    value: str, description: str | None = None
+) -> tuple[Target, str | None]:
+    """Return a canonical standard target or a described custom target.
+
+    Standard aliases intentionally keep their existing, validated wording.  A
+    nonstandard label must carry a definition so the VLM does not have to infer
+    the desired object from its name.
+    """
+    target = normalize_target(value)
+    if not target:
+        raise ValueError("target must not be empty")
+    if target in STANDARD_TARGETS:
+        return target, None
+    custom_description = (description or "").strip()
+    if not custom_description:
+        raise ValueError(
+            "--target-description is required when --target is not "
+            "nuclear or whole_cell"
+        )
+    return target, custom_description
 
 
 def preset_target(modality: str) -> Target | None:
@@ -153,6 +200,7 @@ class RunConfig:
     target: Target
     modality: str
     modality_description: str | None = None
+    target_description: str | None = None
     teacher_fraction: float = 1.0
     vlm_model: str = "gpt-5.5"
     repetitions: int = 3
@@ -162,8 +210,9 @@ class RunConfig:
     seed: int = 120912
 
     def __post_init__(self) -> None:
-        if self.target not in ("nuclear", "whole_cell"):
-            raise ValueError("target must be 'nuclear' or 'whole_cell'")
+        target, target_description = resolve_target(self.target, self.target_description)
+        object.__setattr__(self, "target", target)
+        object.__setattr__(self, "target_description", target_description)
         if not 0 <= self.teacher_fraction <= 1:
             raise ValueError("teacher_fraction must be in [0, 1]")
         if self.repetitions != 3:

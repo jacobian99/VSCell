@@ -6,7 +6,13 @@ import base64
 from pathlib import Path
 from typing import Sequence
 
-from .config import Target, normalize_modality, preset_target
+from .config import (
+    STANDARD_TARGETS,
+    Target,
+    normalize_modality,
+    normalize_target,
+    preset_target,
+)
 from .ranking import LETTERS, ORDINALS
 
 
@@ -71,6 +77,52 @@ MODALITY_DESCRIPTIONS = {
     ),
 }
 
+# Built-in descriptions above name their validated segmentation target.  When
+# ranking a custom target, retain only the image-appearance information so that
+# the modality text does not contradict the user-provided target definition.
+CUSTOM_TARGET_MODALITY_DESCRIPTIONS = {
+    "DAPI": (
+        "This is a DAPI-stained nuclear fluorescence microscopy crop. Nuclei "
+        "typically appear as bright blobs on a dark background."
+    ),
+    "ssDNA": (
+        "This is an ssDNA-stained nuclear microscopy crop. The single-stranded "
+        "DNA signal generally appears bright on a dark background."
+    ),
+    "H&E": (
+        "This is an H&E histology crop rendered as inverted grayscale, so "
+        "nuclei generally appear bright on a dark background."
+    ),
+    "mIF": (
+        "This is an mIF membrane-stained microscopy crop. Bright membrane "
+        "outlines enclose darker cell interiors."
+    ),
+    "phase_contrast": (
+        "This is a label-free phase-contrast microscopy crop with textured or "
+        "granular regions and possible bright/dark refractive boundary halos."
+    ),
+    "fluorescence": (
+        "This is a fluorescence microscopy crop with variable signal intensity, "
+        "polarity, labeling, and possible diffuse or punctate background."
+    ),
+    "brightfield": (
+        "This is a stained brightfield microscopy crop with colored, textured "
+        "structures against a lighter field."
+    ),
+    "DIC": (
+        "This is a label-free differential interference contrast microscopy crop "
+        "with paired bright/dark edge shading and relief-like texture."
+    ),
+}
+
+
+def _target_phrases(target: Target) -> tuple[str, str, str, str]:
+    canonical = normalize_target(target)
+    if canonical in TARGET_PHRASES:
+        return TARGET_PHRASES[canonical]
+    label = target.strip()
+    return ("target instance", "target instances", "defined target instances", label)
+
 
 def modality_description(
     modality: str,
@@ -80,23 +132,35 @@ def modality_description(
     if custom_description:
         return custom_description.strip()
     canonical = normalize_modality(modality)
+    canonical_target = normalize_target(target)
     expected_target = preset_target(canonical)
-    if expected_target is not None and expected_target != target:
+    if (
+        expected_target is not None
+        and expected_target != canonical_target
+        and canonical_target in STANDARD_TARGETS
+    ):
         raise ValueError(
             f"built-in modality {canonical!r} is validated for target "
-            f"{expected_target!r}, not {target!r}; provide an explicit custom "
+            f"{expected_target!r}, not {canonical_target!r}; provide an explicit custom "
             "modality description to intentionally override the preset"
         )
     if canonical in MODALITY_DESCRIPTIONS:
+        if canonical_target not in STANDARD_TARGETS:
+            return CUSTOM_TARGET_MODALITY_DESCRIPTIONS[canonical]
         return MODALITY_DESCRIPTIONS[canonical]
-    if target == "whole_cell":
+    if canonical_target == "whole_cell":
         return (
             f"This is a {modality} microscopy crop. The target is WHOLE-CELL "
             "instance segmentation; each segmented region should fill one cell body."
         )
+    if canonical_target == "nuclear":
+        return (
+            f"This is a {modality} microscopy crop. The target is NUCLEAR instance "
+            "segmentation; each segmented region should contain one nucleus."
+        )
     return (
-        f"This is a {modality} microscopy crop. The target is NUCLEAR instance "
-        "segmentation; each segmented region should contain one nucleus."
+        f"This is a {modality} microscopy crop. The segmentation target is "
+        "defined separately by the user."
     )
 
 
@@ -110,14 +174,23 @@ def _ranking_template(count: int) -> str:
     return " ".join(f"{ordinal}=[letter]" for ordinal in ORDINALS[:count])
 
 
-def system_prompt(candidate_count: int, target: Target) -> str:
+def system_prompt(
+    candidate_count: int,
+    target: Target,
+    custom_target_description: str | None = None,
+) -> str:
     labels = _labels(candidate_count)
     last_two = ", ".join(labels[:-1]) + " and " + labels[-1]
     letter_set = ", ".join(labels)
     number = {4: "FOUR", 5: "FIVE", 6: "SIX"}.get(
         candidate_count, str(candidate_count)
     )
-    target_phrase = TARGET_PHRASES[target][3]
+    target_phrase = _target_phrases(target)[3]
+    definition_note = (
+        " A user-defined target definition in the following message is authoritative."
+        if custom_target_description
+        else ""
+    )
     return (
         f"You are an expert evaluator of {target_phrase} instance segmentation. "
         "You will see a reference microscopy image, then "
@@ -128,7 +201,7 @@ def system_prompt(candidate_count: int, target: Target) -> str:
         "worst by how faithfully each segments the true target. You MUST produce a "
         "strict ranking with NO ties and NO repeats. End your response with EXACTLY "
         f"one line: 'RANKING: {_ranking_template(candidate_count)}' where each "
-        f"[letter] is one of {letter_set}."
+        f"[letter] is one of {letter_set}.{definition_note}"
     )
 
 
@@ -147,12 +220,13 @@ def user_content(
     modality: str,
     target: Target,
     custom_modality_description: str | None = None,
+    custom_target_description: str | None = None,
 ) -> list[dict[str, object]]:
     count = len(mapping)
     labels = _labels(count)
     if list(mapping) != labels or set(mapping.values()) != set(candidate_paths):
         raise ValueError("candidate paths and anonymized mapping are inconsistent")
-    singular, plural, reference_target_phrase, _ = TARGET_PHRASES[target]
+    singular, plural, reference_target_phrase, _ = _target_phrases(target)
     label_csv = ", ".join(labels[:-1]) + ", " + labels[-1]
     number = {4: "four", 5: "five", 6: "six"}.get(count, str(count))
     criteria = (
@@ -183,17 +257,31 @@ def user_content(
                 modality, target, custom_description=custom_modality_description
             ),
         },
-        {
+    ]
+    if custom_target_description:
+        content.append(
+            {
+                "type": "text",
+                "text": (
+                    f"USER-DEFINED SEGMENTATION TARGET ({target}): "
+                    f"{custom_target_description.strip()}"
+                ),
+            }
+        )
+    content.extend(
+        [
+            {
             "type": "text",
             "text": (
                 "REFERENCE IMAGE -- study this first; use the "
                 f"{reference_target_phrase} visible here as the visual target for "
                 "segmentation:"
             ),
-        },
-        {"type": "image_url", "image_url": {"url": data_url(reference_path)}},
-        {"type": "text", "text": criteria},
-    ]
+            },
+            {"type": "image_url", "image_url": {"url": data_url(reference_path)}},
+            {"type": "text", "text": criteria},
+        ]
+    )
     for label in labels:
         model = mapping[label]
         content.extend(

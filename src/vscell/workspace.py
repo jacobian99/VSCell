@@ -7,7 +7,7 @@ import random
 from pathlib import Path
 from typing import Any, Iterable
 
-from .config import DEFAULT_MODELS, EnsembleConfig, GridConfig
+from .config import DEFAULT_MODELS, EnsembleConfig, GridConfig, resolve_target
 from .ensemble import vscell_consensus
 from .grid import GridPlan, Patch, build_grid, plan_grid
 from .io import list_images, read_image, read_mask, write_mask
@@ -106,6 +106,7 @@ def prepare_workspace(
     *,
     target: str,
     modality: str,
+    target_description: str | None = None,
     models: Iterable[str] = DEFAULT_MODELS,
     grid: GridConfig = GridConfig(),
 ) -> Path:
@@ -113,6 +114,7 @@ def prepare_workspace(
     models = list(models)
     if len(models) < 3 or len(set(models)) != len(models):
         raise ValueError("models must contain at least three unique names")
+    target, target_description = resolve_target(target, target_description)
     output_dir = Path(output_dir).resolve()
     candidate_root = Path(candidate_root).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -120,6 +122,7 @@ def prepare_workspace(
     manifest: dict[str, Any] = {
         "manifest_version": MANIFEST_VERSION,
         "target": target,
+        "target_description": target_description,
         "modality": modality,
         "models": models,
         "grid_config": grid.__dict__,

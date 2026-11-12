@@ -80,6 +80,7 @@ def render_rank_teacher_script(
     memory: str = "8G",
     seed: int = 120912,
     modality_description: str | None = None,
+    target_description: str | None = None,
 ) -> Path:
     if workers < 1:
         raise ValueError("workers must be at least 1")
@@ -115,6 +116,8 @@ def render_rank_teacher_script(
     ]
     if modality_description:
         command.extend(["--modality-description", modality_description])
+    if target_description:
+        command.extend(["--target-description", target_description])
     rendered_command = " \\\n  ".join(shlex.quote(item) for item in command)
     body = f"""#!/bin/bash
 #SBATCH --job-name=vscell_rank

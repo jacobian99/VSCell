@@ -148,13 +148,16 @@ def rank_patch(
     target: Target,
     model: str = "gpt-5.5",
     custom_modality_description: str | None = None,
+    custom_target_description: str | None = None,
     repetitions: int = 3,
 ) -> tuple[list[str], dict[str, int], list[VLMCall]]:
     if repetitions != 3:
         raise ValueError("validated VSCell inference uses exactly three repetitions")
     model = canonical_model(model)
     candidates = list(candidate_paths)
-    system = system_prompt(len(candidates), target)
+    system = system_prompt(
+        len(candidates), target, custom_target_description=custom_target_description
+    )
     calls: list[VLMCall] = []
     for repetition in range(repetitions):
         mapping = shuffled_mapping(crop_id, repetition, candidates)
@@ -165,6 +168,7 @@ def rank_patch(
             modality,
             target,
             custom_modality_description,
+            custom_target_description,
         )
         if provider_for(model) == "anthropic":
             raw, response_model, usage = _call_anthropic(model, system, content)

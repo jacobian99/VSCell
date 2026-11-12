@@ -12,7 +12,15 @@ from pathlib import Path
 
 from . import workflow as wf
 from .backends import BACKENDS, backend_environment_hint, run_backend
-from .config import DEFAULT_MODELS, MODEL_IDS, EnsembleConfig, GridConfig
+from .config import (
+    DEFAULT_MODELS,
+    MODEL_IDS,
+    STANDARD_TARGETS,
+    EnsembleConfig,
+    GridConfig,
+    normalize_target,
+    resolve_target,
+)
 from .ranking import pairwise_vote_probabilities
 from .slurm import (
     render_backend_scripts,
@@ -100,11 +108,17 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _cmd_backend(args: argparse.Namespace) -> int:
+    target = normalize_target(args.target)
+    if target not in STANDARD_TARGETS:
+        raise ValueError(
+            "the built-in backends support only nuclear or whole_cell targets; "
+            "use existing candidate masks when ranking a custom target"
+        )
     results = run_backend(
         args.backend,
         args.input,
         args.output,
-        args.target,
+        target,
         args.modality,
         args.device,
         args.overwrite,
@@ -124,11 +138,15 @@ def _cmd_backend(args: argparse.Namespace) -> int:
 
 
 def _cmd_prepare(args: argparse.Namespace) -> int:
+    target, target_description = resolve_target(
+        args.target, getattr(args, "target_description", None)
+    )
     path = prepare_workspace(
         args.input,
         args.candidates,
         args.output,
-        target=args.target,
+        target=target,
+        target_description=target_description,
         modality=args.modality,
         models=args.models,
         grid=_grid_from_args(args),
@@ -149,6 +167,7 @@ def _rank_teacher_record(
     patch_id: str,
     vlm_model: str,
     modality_description: str | None,
+    target_description: str | None,
 ) -> dict:
     candidates = list(manifest["models"])
     candidate_panels = {
@@ -162,6 +181,7 @@ def _rank_teacher_record(
         manifest["target"],
         model=vlm_model,
         custom_modality_description=modality_description,
+        custom_target_description=target_description,
     )
     repetitions = [call.ranking for call in calls]
     return {
@@ -180,6 +200,11 @@ def _rank_teacher_record(
 
 def _cmd_rank_teacher(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest)
+    target, target_description = resolve_target(
+        manifest["target"],
+        getattr(args, "target_description", None) or manifest.get("target_description"),
+    )
+    manifest["target"] = target
     teacher, _ = select_teacher_patches(manifest, args.teacher_fraction, args.seed)
     projected = estimated_cost(args.vlm_model, len(manifest["patches"]), args.teacher_fraction)
     preflight = (
@@ -228,6 +253,7 @@ def _cmd_rank_teacher(args: argparse.Namespace) -> int:
                     patch_id,
                     args.vlm_model,
                     args.modality_description,
+                    target_description,
                 ): patch_id
                 for patch_id in pending
             }
@@ -343,11 +369,17 @@ def _cmd_finalize(args: argparse.Namespace) -> int:
 
 
 def _cmd_slurm(args: argparse.Namespace) -> int:
+    target = normalize_target(args.target)
+    if target not in STANDARD_TARGETS:
+        raise ValueError(
+            "the built-in backend Slurm scripts support only nuclear or whole_cell "
+            "targets; use existing candidate masks for a custom target"
+        )
     paths = render_backend_scripts(
         args.output,
         input_path=args.input,
         candidate_root=args.candidates,
-        target=args.target,
+        target=target,
         modality=args.modality,
         account=args.account,
         gpu_partition=args.gpu_partition,
@@ -376,6 +408,7 @@ def _cmd_rank_slurm(args: argparse.Namespace) -> int:
         memory=args.memory,
         seed=args.seed,
         modality_description=args.modality_description,
+        target_description=args.target_description,
     )
     wf.announce(
         f"Created ranking script with model={args.vlm_model}, "
@@ -581,13 +614,26 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
             if interactive
             else "nuclear"
         )
+    target, target_description = resolve_target(
+        target, getattr(args, "target_description", None)
+    )
     modality = args.modality
     modality_description = args.modality_description
     if modality is None:
         if interactive:
-            modality, prompted_description = _prompt_guided_modality(target)
+            if target not in STANDARD_TARGETS:
+                modality = wf.prompt_text("Imaging modality")
+                prompted_description = wf.prompt_text(
+                    "Describe the image appearance and segmentation-relevant signals"
+                )
+            else:
+                modality, prompted_description = _prompt_guided_modality(target)
             if modality_description is None:
                 modality_description = prompted_description
+        elif target not in STANDARD_TARGETS:
+            raise RuntimeError(
+                "--modality is required for a non-interactive custom-target run"
+            )
         else:
             modality = "ssDNA" if target == "nuclear" else "mIF"
 
@@ -617,6 +663,12 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
             )
         else:
             candidate_source = "existing"
+
+    if target not in STANDARD_TARGETS and candidate_source == "slurm":
+        raise ValueError(
+            "custom targets are ranking-only and require --candidate-source existing; "
+            "the built-in segmentation backends remain nuclear/whole-cell only"
+        )
 
     if args.candidates is None and interactive:
         path_label = (
@@ -884,6 +936,7 @@ def _new_guided_config(args: argparse.Namespace, interactive: bool) -> tuple[dic
         "workspace": str(workspace),
         "slurm_dir": str((run_root / "slurm").resolve()),
         "target": target,
+        "target_description": target_description,
         "modality": modality,
         "modality_description": modality_description,
         "models": list(models),
@@ -934,6 +987,11 @@ def _print_guided_summary(config: dict, plan: dict) -> None:
     )
     print(f"  Models:           {', '.join(config['models'])}", file=sys.stderr)
     print(f"  Target/modality:  {config['target']} / {config['modality']}", file=sys.stderr)
+    if config.get("target_description"):
+        print(
+            f"  Target details:    {config['target_description']}",
+            file=sys.stderr,
+        )
     if config["modality_description"]:
         print(
             f"  Modality details:  {config['modality_description']}",
@@ -1148,6 +1206,7 @@ def _execute_guided_run(args: argparse.Namespace, state_path: Path, state: dict)
                 candidates,
                 workspace,
                 target=config["target"],
+                target_description=config.get("target_description"),
                 modality=config["modality"],
                 models=config["models"],
                 grid=grid,
@@ -1220,6 +1279,7 @@ def _execute_guided_run(args: argparse.Namespace, state_path: Path, state: dict)
                         teacher_fraction=config["teacher_fraction"],
                         vlm_model=config["vlm_model"],
                         modality_description=config["modality_description"],
+                        target_description=config.get("target_description"),
                         seed=config["seed"],
                         workers=config["workers"],
                         resume=True,
@@ -1263,6 +1323,7 @@ def _execute_guided_run(args: argparse.Namespace, state_path: Path, state: dict)
                     memory=config["rank_memory"],
                     seed=config["seed"],
                     modality_description=config["modality_description"],
+                    target_description=config.get("target_description"),
                 )
                 with wf.provider_key(
                     config["vlm_model"],
@@ -1615,7 +1676,18 @@ def build_parser() -> argparse.ArgumentParser:
             "legacy OUTPUT/candidates is auto-detected)"
         ),
     )
-    guided.add_argument("--target", choices=("nuclear", "whole_cell"))
+    guided.add_argument(
+        "--target",
+        help=(
+            "Segmentation target. Standard aliases such as nuclei and wholecells "
+            "use VSCell's built-in behavior; other labels require "
+            "--target-description."
+        ),
+    )
+    guided.add_argument(
+        "--target-description",
+        help="Required definition of the desired object for a custom target.",
+    )
     guided.add_argument("--modality")
     guided.add_argument("--modality-description")
     guided.add_argument(
@@ -1721,7 +1793,7 @@ def build_parser() -> argparse.ArgumentParser:
     backend.add_argument("--backend", choices=sorted(BACKENDS), required=True)
     backend.add_argument("--input", required=True)
     backend.add_argument("--output", required=True)
-    backend.add_argument("--target", choices=("nuclear", "whole_cell"), required=True)
+    backend.add_argument("--target", required=True)
     backend.add_argument("--modality", required=True)
     backend.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     backend.add_argument("--overwrite", action="store_true")
@@ -1731,7 +1803,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--input", required=True)
     prepare.add_argument("--candidates", required=True)
     prepare.add_argument("--output", required=True)
-    prepare.add_argument("--target", choices=("nuclear", "whole_cell"), required=True)
+    prepare.add_argument("--target", required=True)
+    prepare.add_argument("--target-description")
     prepare.add_argument("--modality", required=True)
     prepare.add_argument(
         "--models",
@@ -1760,6 +1833,7 @@ def build_parser() -> argparse.ArgumentParser:
     rank.add_argument("--teacher-fraction", type=float, required=True)
     rank.add_argument("--vlm-model", default="gpt-5.5")
     rank.add_argument("--modality-description")
+    rank.add_argument("--target-description")
     rank.add_argument("--seed", type=int, default=120912)
     rank.add_argument(
         "--workers",
@@ -1805,7 +1879,7 @@ def build_parser() -> argparse.ArgumentParser:
     slurm.add_argument("--input", required=True)
     slurm.add_argument("--candidates", required=True)
     slurm.add_argument("--output", required=True)
-    slurm.add_argument("--target", choices=("nuclear", "whole_cell"), required=True)
+    slurm.add_argument("--target", required=True)
     slurm.add_argument("--modality", required=True)
     slurm.add_argument("--account", default="<ACCOUNT>")
     slurm.add_argument("--gpu-partition", default="<GPU_PARTITION>")
@@ -1821,6 +1895,7 @@ def build_parser() -> argparse.ArgumentParser:
     rank_slurm.add_argument("--teacher-fraction", type=float, required=True)
     rank_slurm.add_argument("--vlm-model", default="gpt-5.5")
     rank_slurm.add_argument("--modality-description")
+    rank_slurm.add_argument("--target-description")
     rank_slurm.add_argument("--seed", type=int, default=120912)
     rank_slurm.add_argument("--workers", type=_positive_int, default=32)
     rank_slurm.add_argument("--environment", default=sys.prefix)

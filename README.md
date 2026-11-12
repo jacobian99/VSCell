@@ -92,11 +92,33 @@ export OPENAI_API_KEY
 ```
 
 ```bash
+# Built-in nuclear aliases: nuclear, nucleus, nuclei.
+# Built-in whole-cell aliases: whole_cell, whole cells, wholecells.
+# Any other --target requires --target-description "define one desired instance".
+# Any non-preset --modality should include --modality-description "describe its signals".
 vscell run \
   --input data \
   --output run \
   --target nuclear \
   --modality DAPI \
+  --candidate-source existing \
+  --teacher-fraction 0.5 \
+  --vlm-model gpt-5.5 \
+  --non-interactive --yes
+```
+
+For an additional prompt-level target, use existing candidate masks and provide
+the target definition that the VLM should use while ranking. This does not
+alter the built-in candidate models or their preprocessing routes:
+
+```bash
+vscell run \
+  --input data \
+  --output run \
+  --target glomerulus \
+  --target-description "Segment each complete glomerulus as one instance; include the tuft and exclude surrounding tubules." \
+  --modality "PAS histology" \
+  --modality-description "PAS-stained histology with magenta basement membranes and variable tissue texture." \
   --candidate-source existing \
   --teacher-fraction 0.5 \
   --vlm-model gpt-5.5 \
